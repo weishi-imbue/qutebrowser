@@ -278,7 +278,7 @@ class CommandDispatcher:
             return
 
         to_pin = not tab.data.pinned
-        self._tabbed_browser.widget.set_tab_pinned(tab, to_pin)
+        tab.set_pinned(to_pin)
 
     @cmdutils.register(instance='command-dispatcher', name='open',
                        maxsplit=0, scope='window')

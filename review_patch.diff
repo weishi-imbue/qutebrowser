@@ -1,0 +1,42 @@
+diff --git a/qutebrowser/browser/browsertab.py b/qutebrowser/browser/browsertab.py
+index b7b2f3d91..e720a7f4b 100644
+--- a/qutebrowser/browser/browsertab.py
++++ b/qutebrowser/browser/browsertab.py
+@@ -920,6 +920,8 @@ class AbstractTab(QWidget):
+     # arg 0: A TerminationStatus member.
+     # arg 1: The exit code.
+     renderer_process_terminated = pyqtSignal(TerminationStatus, int)
++    #: Signal emitted when a tab's pinned state changes (new pinned state as bool)
++    pinned_changed = pyqtSignal(bool)
+ 
+     # Hosts for which a certificate error happened. Shared between all tabs.
+     #
+@@ -1018,6 +1020,15 @@ class AbstractTab(QWidget):
+         """Test if navigation is allowed on the current tab."""
+         return self.data.pinned and config.val.tabs.pinned.frozen
+ 
++    def set_pinned(self, pinned: bool) -> None:
++        """Sets the pinned state of the tab's data and emits a pinned_changed signal.
++
++        Args:
++            pinned: The new pinned state for this tab.
++        """
++        self.data.pinned = pinned
++        self.pinned_changed.emit(pinned)
++
+     @pyqtSlot(QUrl)
+     def _on_before_load_started(self, url: QUrl) -> None:
+         """Adjust the title if we are going to visit a URL soon."""
+diff --git a/qutebrowser/browser/commands.py b/qutebrowser/browser/commands.py
+index ff18b5408..831bcd8c7 100644
+--- a/qutebrowser/browser/commands.py
++++ b/qutebrowser/browser/commands.py
+@@ -278,7 +278,7 @@ class CommandDispatcher:
+             return
+ 
+         to_pin = not tab.data.pinned
+-        self._tabbed_browser.widget.set_tab_pinned(tab, to_pin)
++        tab.set_pinned(to_pin)
+ 
+     @cmdutils.register(instance='command-dispatcher', name='open',
+                        maxsplit=0, scope='window')
