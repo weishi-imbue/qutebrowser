@@ -22,6 +22,9 @@
 Defined here to avoid circular dependency hell.
 """
 
+import difflib
+from typing import List, Optional
+
 
 class Error(Exception):
 
@@ -31,6 +34,36 @@ class Error(Exception):
 class NoSuchCommandError(Error):
 
     """Raised when a command isn't found."""
+
+    @classmethod
+    def for_cmd(cls, cmd: str, all_commands: Optional[List[str]] = None):
+        """Construct a NoSuchCommandError with an optional suggestion.
+
+        Args:
+            cmd: The command string entered by the user.
+            all_commands: A list of all valid command strings to compare for suggestions.
+
+        Returns:
+            A NoSuchCommandError exception instance with a formatted error message,
+            potentially including a suggestion for the closest matching command.
+        """
+        if all_commands:
+            matches = difflib.get_close_matches(cmd, all_commands, n=1)
+            if matches:
+                message = f"{cmd}: no such command (did you mean :{matches[0]}?)"
+            else:
+                message = f"{cmd}: no such command"
+        else:
+            message = f"{cmd}: no such command"
+        return cls(message)
+
+
+class EmptyCommandError(NoSuchCommandError):
+
+    """Raised when no command was provided."""
+
+    def __init__(self):
+        super().__init__("No command given")
 
 
 class ArgumentTypeError(Error):

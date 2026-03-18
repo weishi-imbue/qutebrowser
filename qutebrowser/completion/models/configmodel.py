@@ -118,7 +118,7 @@ def _bind_current_default(key, info):
     cmd_text = info.keyconf.get_command(seq, 'normal')
     if cmd_text:
         try:
-            cmd = parser.CommandParser().parse(cmd_text).cmd
+            cmd = parser.CommandParser(find_similar=False).parse(cmd_text).cmd
         except cmdexc.NoSuchCommandError:
             data.append((cmd_text, '(Current) Invalid command!', key))
         else:
@@ -126,7 +126,7 @@ def _bind_current_default(key, info):
 
     cmd_text = info.keyconf.get_command(seq, 'normal', default=True)
     if cmd_text:
-        cmd = parser.CommandParser().parse(cmd_text).cmd
+        cmd = parser.CommandParser(find_similar=False).parse(cmd_text).cmd
         data.append((cmd_text, '(Default) {}'.format(cmd.desc), key))
 
     return data
