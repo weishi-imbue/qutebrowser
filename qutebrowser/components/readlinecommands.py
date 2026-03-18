@@ -117,9 +117,11 @@ class _ReadlineBridge:
             target_position -= 1
 
         moveby = cursor_position - target_position - 1
-        widget.cursorBackward(True, moveby)
-        self._deleted[widget] = widget.selectedText()
-        widget.del_()
+        if moveby > 0:
+            widget.setCursorPosition(cursor_position)
+            widget.cursorBackward(True, moveby)
+            self._deleted[widget] = widget.selectedText()
+            widget.del_()
 
     def backward_kill_word(self) -> None:
         self._dispatch('cursorWordBackward', mark=True, delete=True)
