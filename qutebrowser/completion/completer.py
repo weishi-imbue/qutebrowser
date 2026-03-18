@@ -147,7 +147,7 @@ class Completer(QObject):
             return [], '', []
 
         try:
-            parse_result = parser.CommandParser().parse(text, keep=True)
+            parse_result = parser.CommandParser(find_similar=False).parse(text, keep=True)
         except cmdexc.NoSuchCommandError:
             cmdline = split.split(text, keep=True)
         else:

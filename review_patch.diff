@@ -1,0 +1,177 @@
+diff --git a/qutebrowser/commands/cmdexc.py b/qutebrowser/commands/cmdexc.py
+index fdd06537f..dcea2f887 100644
+--- a/qutebrowser/commands/cmdexc.py
++++ b/qutebrowser/commands/cmdexc.py
+@@ -22,6 +22,9 @@
+ Defined here to avoid circular dependency hell.
+ """
+ 
++import difflib
++from typing import List, Optional
++
+ 
+ class Error(Exception):
+ 
+@@ -32,6 +35,36 @@ class NoSuchCommandError(Error):
+ 
+     """Raised when a command isn't found."""
+ 
++    @classmethod
++    def for_cmd(cls, cmd: str, all_commands: Optional[List[str]] = None):
++        """Construct a NoSuchCommandError with an optional suggestion.
++
++        Args:
++            cmd: The command string entered by the user.
++            all_commands: A list of all valid command strings to compare for suggestions.
++
++        Returns:
++            A NoSuchCommandError exception instance with a formatted error message,
++            potentially including a suggestion for the closest matching command.
++        """
++        if all_commands:
++            matches = difflib.get_close_matches(cmd, all_commands, n=1)
++            if matches:
++                message = f"{cmd}: no such command (did you mean :{matches[0]}?)"
++            else:
++                message = f"{cmd}: no such command"
++        else:
++            message = f"{cmd}: no such command"
++        return cls(message)
++
++
++class EmptyCommandError(NoSuchCommandError):
++
++    """Raised when no command was provided."""
++
++    def __init__(self):
++        super().__init__("No command given")
++
+ 
+ class ArgumentTypeError(Error):
+ 
+diff --git a/qutebrowser/commands/parser.py b/qutebrowser/commands/parser.py
+index 06a20cdf6..1d7982556 100644
+--- a/qutebrowser/commands/parser.py
++++ b/qutebrowser/commands/parser.py
+@@ -43,10 +43,12 @@ class CommandParser:
+ 
+     Attributes:
+         _partial_match: Whether to allow partial command matches.
++        _find_similar: Whether to include suggestions for unknown commands.
+     """
+ 
+-    def __init__(self, partial_match: bool = False) -> None:
++    def __init__(self, partial_match: bool = False, find_similar: bool = True) -> None:
+         self._partial_match = partial_match
++        self._find_similar = find_similar
+ 
+     def _get_alias(self, text: str, *, default: str) -> str:
+         """Get an alias from the config.
+@@ -95,7 +97,7 @@ class CommandParser:
+         """
+         text = text.strip().lstrip(':').strip()
+         if not text:
+-            raise cmdexc.NoSuchCommandError("No command given")
++            raise cmdexc.EmptyCommandError()
+ 
+         if aliases:
+             text = self._get_alias(text, default=text)
+@@ -128,7 +130,7 @@ class CommandParser:
+         cmdstr, sep, argstr = text.partition(' ')
+ 
+         if not cmdstr:
+-            raise cmdexc.NoSuchCommandError("No command given")
++            raise cmdexc.EmptyCommandError()
+ 
+         if self._partial_match:
+             cmdstr = self._completion_match(cmdstr)
+@@ -136,7 +138,11 @@ class CommandParser:
+         try:
+             cmd = objects.commands[cmdstr]
+         except KeyError:
+-            raise cmdexc.NoSuchCommandError(f'{cmdstr}: no such command')
++            if self._find_similar:
++                all_commands = list(objects.commands.keys())
++                raise cmdexc.NoSuchCommandError.for_cmd(cmdstr, all_commands)
++            else:
++                raise cmdexc.NoSuchCommandError.for_cmd(cmdstr)
+ 
+         args = self._split_args(cmd, argstr, keep)
+         if keep and args:
+diff --git a/qutebrowser/commands/runners.py b/qutebrowser/commands/runners.py
+index 5fb054455..37f5c42d8 100644
+--- a/qutebrowser/commands/runners.py
++++ b/qutebrowser/commands/runners.py
+@@ -138,9 +138,9 @@ class CommandRunner(AbstractCommandRunner):
+         _win_id: The window this CommandRunner is associated with.
+     """
+ 
+-    def __init__(self, win_id, partial_match=False, parent=None):
++    def __init__(self, win_id, partial_match=False, find_similar=True, parent=None):
+         super().__init__(parent)
+-        self._parser = parser.CommandParser(partial_match=partial_match)
++        self._parser = parser.CommandParser(partial_match=partial_match, find_similar=find_similar)
+         self._win_id = win_id
+ 
+     @contextlib.contextmanager
+diff --git a/qutebrowser/completion/completer.py b/qutebrowser/completion/completer.py
+index b94077c6d..0112e8034 100644
+--- a/qutebrowser/completion/completer.py
++++ b/qutebrowser/completion/completer.py
+@@ -147,7 +147,7 @@ class Completer(QObject):
+             return [], '', []
+ 
+         try:
+-            parse_result = parser.CommandParser().parse(text, keep=True)
++            parse_result = parser.CommandParser(find_similar=False).parse(text, keep=True)
+         except cmdexc.NoSuchCommandError:
+             cmdline = split.split(text, keep=True)
+         else:
+diff --git a/qutebrowser/completion/models/configmodel.py b/qutebrowser/completion/models/configmodel.py
+index 7c8473b3f..8f1135445 100644
+--- a/qutebrowser/completion/models/configmodel.py
++++ b/qutebrowser/completion/models/configmodel.py
+@@ -118,7 +118,7 @@ def _bind_current_default(key, info):
+     cmd_text = info.keyconf.get_command(seq, 'normal')
+     if cmd_text:
+         try:
+-            cmd = parser.CommandParser().parse(cmd_text).cmd
++            cmd = parser.CommandParser(find_similar=False).parse(cmd_text).cmd
+         except cmdexc.NoSuchCommandError:
+             data.append((cmd_text, '(Current) Invalid command!', key))
+         else:
+@@ -126,7 +126,7 @@ def _bind_current_default(key, info):
+ 
+     cmd_text = info.keyconf.get_command(seq, 'normal', default=True)
+     if cmd_text:
+-        cmd = parser.CommandParser().parse(cmd_text).cmd
++        cmd = parser.CommandParser(find_similar=False).parse(cmd_text).cmd
+         data.append((cmd_text, '(Default) {}'.format(cmd.desc), key))
+ 
+     return data
+diff --git a/qutebrowser/config/config.py b/qutebrowser/config/config.py
+index 918c9b894..e64aee765 100644
+--- a/qutebrowser/config/config.py
++++ b/qutebrowser/config/config.py
+@@ -171,7 +171,7 @@ class KeyConfig:
+     def _implied_cmd(self, cmdline: str) -> Optional[str]:
+         """Return cmdline, or the implied cmd if cmdline is a set-cmd-text."""
+         try:
+-            results = parser.CommandParser().parse_all(cmdline)
++            results = parser.CommandParser(find_similar=False).parse_all(cmdline)
+         except cmdexc.NoSuchCommandError:
+             return None
+ 
+diff --git a/tests/end2end/features/misc.feature b/tests/end2end/features/misc.feature
+index e6a02e038..bd8ada576 100644
+--- a/tests/end2end/features/misc.feature
++++ b/tests/end2end/features/misc.feature
+@@ -389,7 +389,7 @@ Feature: Various utility commands.
+ 
+     Scenario: Partial commandline matching with startup command
+         When I run :message-i "Hello World" (invalid command)
+-        Then the error "message-i: no such command" should be shown
++        Then the error "message-i: no such command (did you mean :message-info?)" should be shown
+ 
+      Scenario: Multiple leading : in command
+         When I run :::::set-cmd-text ::::message-i "Hello World"
