@@ -920,6 +920,8 @@ class AbstractTab(QWidget):
     # arg 0: A TerminationStatus member.
     # arg 1: The exit code.
     renderer_process_terminated = pyqtSignal(TerminationStatus, int)
+    #: Signal emitted when a tab's pinned state changes (new pinned state as bool)
+    pinned_changed = pyqtSignal(bool)
 
     # Hosts for which a certificate error happened. Shared between all tabs.
     #
@@ -1017,6 +1019,15 @@ class AbstractTab(QWidget):
     def navigation_blocked(self) -> bool:
         """Test if navigation is allowed on the current tab."""
         return self.data.pinned and config.val.tabs.pinned.frozen
+
+    def set_pinned(self, pinned: bool) -> None:
+        """Sets the pinned state of the tab's data and emits a pinned_changed signal.
+
+        Args:
+            pinned: The new pinned state for this tab.
+        """
+        self.data.pinned = pinned
+        self.pinned_changed.emit(pinned)
 
     @pyqtSlot(QUrl)
     def _on_before_load_started(self, url: QUrl) -> None:

@@ -367,6 +367,8 @@ class TabbedBrowser(QWidget):
             functools.partial(self._on_audio_changed, tab))
         tab.audio.recently_audible_changed.connect(
             functools.partial(self._on_audio_changed, tab))
+        tab.pinned_changed.connect(
+            functools.partial(self._on_pinned_changed, tab))
         tab.new_tab_requested.connect(self.tabopen)
         if not self.is_private:
             tab.history_item_triggered.connect(
@@ -530,7 +532,7 @@ class TabbedBrowser(QWidget):
                 newtab = self.tabopen(background=False, idx=entry.index)
 
             newtab.history.private_api.deserialize(entry.history)
-            self.widget.set_tab_pinned(newtab, entry.pinned)
+            newtab.set_pinned(entry.pinned)
 
     @pyqtSlot('QUrl', bool)
     def load_url(self, url, newtab):
@@ -927,6 +929,16 @@ class TabbedBrowser(QWidget):
         self.widget.update_tab_title(idx, 'audio')
         if idx == self.widget.currentIndex():
             self._update_window_title('audio')
+
+    def _on_pinned_changed(self, tab, _pinned):
+        """Update tab title and favicon when pinned state changes."""
+        try:
+            idx = self._tab_index(tab)
+        except TabDeletedError:
+            # We can get signals for tabs we already deleted...
+            return
+        self.widget.update_tab_title(idx)
+        self.widget.update_tab_favicon(tab)
 
     def _on_renderer_process_terminated(self, tab, status, code):
         """Show an error when a renderer process terminated."""
