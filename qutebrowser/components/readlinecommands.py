@@ -104,22 +104,23 @@ class _ReadlineBridge:
         cursor_position = widget.cursorPosition()
         text = widget.text()
 
-        target_position = cursor_position
+        # Start from the cursor position and move backward
+        pos = cursor_position
 
-        is_boundary = True
-        while is_boundary and target_position > 0:
-            is_boundary = text[target_position - 1] in delim
-            target_position -= 1
+        # Skip any consecutive delimiters immediately to the left of cursor
+        while pos > 0 and text[pos - 1] in delim:
+            pos -= 1
 
-        is_boundary = False
-        while not is_boundary and target_position > 0:
-            is_boundary = text[target_position - 1] in delim
-            target_position -= 1
+        # Continue over non-delimiter characters until start or previous delimiter
+        while pos > 0 and text[pos - 1] not in delim:
+            pos -= 1
 
-        moveby = cursor_position - target_position - 1
-        widget.cursorBackward(True, moveby)
-        self._deleted[widget] = widget.selectedText()
-        widget.del_()
+        # pos now points to where we want to start keeping text
+        moveby = cursor_position - pos
+        if moveby > 0:
+            widget.cursorBackward(True, moveby)
+            self._deleted[widget] = widget.selectedText()
+            widget.del_()
 
     def backward_kill_word(self) -> None:
         self._dispatch('cursorWordBackward', mark=True, delete=True)
