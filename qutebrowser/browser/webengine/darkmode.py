@@ -287,27 +287,6 @@ _DEFINITIONS[Variant.qt_63] = _DEFINITIONS[Variant.qt_515_3].copy_add_setting(
     _Setting('increase_text_contrast', 'IncreaseTextContrast', _INT_BOOLS),
 )
 
-# Qt 6.4+ changes TextBrightnessThreshold to ForegroundBrightnessThreshold
-_DEFINITIONS[Variant.qt_64] = _Definition(
-    # Different switch for settings
-    _Setting('enabled', 'forceDarkModeEnabled', _BOOLS),
-    _Setting('algorithm', 'InversionAlgorithm', _ALGORITHMS_NEW),
-
-    _Setting('policy.images', 'ImagePolicy', _IMAGE_POLICIES),
-    _Setting('contrast', 'ContrastPercent'),
-    _Setting('grayscale.all', 'IsGrayScale', _BOOLS),
-
-    _Setting('threshold.foreground', 'ForegroundBrightnessThreshold'),
-    _Setting('threshold.background', 'BackgroundBrightnessThreshold'),
-    _Setting('grayscale.images', 'ImageGrayScalePercent'),
-
-    _Setting('increase_text_contrast', 'IncreaseTextContrast', _INT_BOOLS),
-
-    mandatory={'enabled', 'policy.images'},
-    prefix='',
-    switch_names={'enabled': _BLINK_SETTINGS, None: 'dark-mode-settings'},
-)
-
 
 _SettingValType = Union[str, usertypes.Unset]
 _PREFERRED_COLOR_SCHEME_DEFINITIONS: Mapping[Variant, Mapping[_SettingValType, str]] = {
@@ -330,11 +309,6 @@ _PREFERRED_COLOR_SCHEME_DEFINITIONS: Mapping[Variant, Mapping[_SettingValType, s
     Variant.qt_63: {
         "dark": "0",
         "light": "1",
-    },
-
-    Variant.qt_64: {
-        "dark": "0",
-        "light": "1",
     }
 }
 
@@ -348,9 +322,7 @@ def _variant(versions: version.WebEngineVersions) -> Variant:
         except KeyError:
             log.init.warning(f"Ignoring invalid QUTE_DARKMODE_VARIANT={env_var}")
 
-    if versions.webengine >= utils.VersionNumber(6, 4):
-        return Variant.qt_64
-    elif versions.webengine >= utils.VersionNumber(6, 3):
+    if versions.webengine >= utils.VersionNumber(6, 3):
         return Variant.qt_63
     elif (versions.webengine == utils.VersionNumber(5, 15, 2) and
             versions.chromium_major == 87):
@@ -402,32 +374,14 @@ def settings(
 
     definition = _DEFINITIONS[variant]
 
-    # Handle backward compatibility: map threshold.text to threshold.foreground for Qt 6.4+
-    compat_mapping = {}
-    if variant == Variant.qt_64:
-        # Check if user has threshold.text set but not threshold.foreground
-        text_value = config.instance.get('colors.webpage.darkmode.threshold.text', fallback=False)
-        foreground_value = config.instance.get('colors.webpage.darkmode.threshold.foreground', fallback=False)
-
-        if not isinstance(text_value, usertypes.Unset) and isinstance(foreground_value, usertypes.Unset):
-            # User has text threshold set but not foreground, use text value for foreground
-            compat_mapping['threshold.foreground'] = text_value
-            log.init.debug("Using threshold.text value for threshold.foreground compatibility")
-
     for switch_name, setting in definition.prefixed_settings():
         # To avoid blowing up the commandline length, we only pass modified
         # settings to Chromium, as our defaults line up with Chromium's.
         # However, we always pass enabled/algorithm to make sure dark mode gets
         # actually turned on.
-
-        # Check for compatibility mapping first
-        if setting.option in compat_mapping:
-            value = compat_mapping[setting.option]
-        else:
-            value = config.instance.get(
-                'colors.webpage.darkmode.' + setting.option,
-                fallback=setting.option in definition.mandatory)
-
+        value = config.instance.get(
+            'colors.webpage.darkmode.' + setting.option,
+            fallback=setting.option in definition.mandatory)
         if isinstance(value, usertypes.Unset):
             continue
 
