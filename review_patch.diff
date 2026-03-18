@@ -1,0 +1,25 @@
+diff --git a/qutebrowser/browser/webengine/darkmode.py b/qutebrowser/browser/webengine/darkmode.py
+index 99bf58789..ef5e581ec 100644
+--- a/qutebrowser/browser/webengine/darkmode.py
++++ b/qutebrowser/browser/webengine/darkmode.py
+@@ -86,6 +86,12 @@ Qt 6.3
+ 
+ - New IncreaseTextContrast:
+ https://chromium-review.googlesource.com/c/chromium/src/+/2893236
++
++Qt 6.4
++------
++
++- TextBrightnessThreshold renamed to ForegroundBrightnessThreshold:
++  This affects the key name used to configure foreground inversion threshold.
+ """
+ 
+ import os
+@@ -110,6 +116,7 @@ class Variant(enum.Enum):
+     qt_515_2 = enum.auto()
+     qt_515_3 = enum.auto()
+     qt_63 = enum.auto()
++    qt_64 = enum.auto()
+ 
+ 
+ # Mapping from a colors.webpage.darkmode.algorithm setting value to
