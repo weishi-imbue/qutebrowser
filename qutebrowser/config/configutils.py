@@ -133,6 +133,7 @@ class Values:
         self._check_pattern_support(pattern)
         scoped = ScopedValue(value, pattern)
         self._vmap[pattern] = scoped
+        self._vmap.move_to_end(pattern)
 
     def remove(self, pattern: urlmatch.UrlPattern = None) -> bool:
         """Remove the value with the given pattern.

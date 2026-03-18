@@ -91,7 +91,7 @@ def test_bool(values, empty_values):
 
 
 def test_iter(values):
-    assert list(iter(values)) == list(iter(values._values))
+    assert list(iter(values)) == list(values._vmap.values())
 
 
 def test_add_existing(values):
