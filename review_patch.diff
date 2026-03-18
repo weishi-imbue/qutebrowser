@@ -27,3 +27,16 @@ index b7b2f3d91..e720a7f4b 100644
      @pyqtSlot(QUrl)
      def _on_before_load_started(self, url: QUrl) -> None:
          """Adjust the title if we are going to visit a URL soon."""
+diff --git a/qutebrowser/browser/commands.py b/qutebrowser/browser/commands.py
+index ff18b5408..831bcd8c7 100644
+--- a/qutebrowser/browser/commands.py
++++ b/qutebrowser/browser/commands.py
+@@ -278,7 +278,7 @@ class CommandDispatcher:
+             return
+ 
+         to_pin = not tab.data.pinned
+-        self._tabbed_browser.widget.set_tab_pinned(tab, to_pin)
++        tab.set_pinned(to_pin)
+ 
+     @cmdutils.register(instance='command-dispatcher', name='open',
+                        maxsplit=0, scope='window')
