@@ -1,0 +1,66 @@
+diff --git a/qutebrowser/components/readlinecommands.py b/qutebrowser/components/readlinecommands.py
+index 7d5b73798..5b4440758 100644
+--- a/qutebrowser/components/readlinecommands.py
++++ b/qutebrowser/components/readlinecommands.py
+@@ -104,22 +104,23 @@ class _ReadlineBridge:
+         cursor_position = widget.cursorPosition()
+         text = widget.text()
+ 
+-        target_position = cursor_position
+-
+-        is_boundary = True
+-        while is_boundary and target_position > 0:
+-            is_boundary = text[target_position - 1] in delim
+-            target_position -= 1
+-
+-        is_boundary = False
+-        while not is_boundary and target_position > 0:
+-            is_boundary = text[target_position - 1] in delim
+-            target_position -= 1
+-
+-        moveby = cursor_position - target_position - 1
+-        widget.cursorBackward(True, moveby)
+-        self._deleted[widget] = widget.selectedText()
+-        widget.del_()
++        # Start from the cursor position and move backward
++        pos = cursor_position
++
++        # Skip any consecutive delimiters immediately to the left of cursor
++        while pos > 0 and text[pos - 1] in delim:
++            pos -= 1
++
++        # Continue over non-delimiter characters until start or previous delimiter
++        while pos > 0 and text[pos - 1] not in delim:
++            pos -= 1
++
++        # pos now points to where we want to start keeping text
++        moveby = cursor_position - pos
++        if moveby > 0:
++            widget.cursorBackward(True, moveby)
++            self._deleted[widget] = widget.selectedText()
++            widget.del_()
+ 
+     def backward_kill_word(self) -> None:
+         self._dispatch('cursorWordBackward', mark=True, delete=True)
+diff --git a/tests/unit/components/test_readlinecommands.py b/tests/unit/components/test_readlinecommands.py
+index b3ca9c301..af815b075 100644
+--- a/tests/unit/components/test_readlinecommands.py
++++ b/tests/unit/components/test_readlinecommands.py
+@@ -279,15 +279,13 @@ def test_rl_unix_filename_rubout(lineedit, text, deleted, rest, method, args):
+ 
+ 
+ @pytest.mark.parametrize('os_sep, text, deleted, rest', [
+-    pytest.param('/', 'path|', 'path', '|', marks=fixme),
+-    ('/', 'path|', 'ath', 'p|'),  # wrong
++    ('/', 'path|', 'path', '|'),
+     ('/', '/path|', 'path', '/|'),
+     ('/', '/path/sub|', 'sub', '/path/|'),
+     ('/', '/path/trailing/|', 'trailing/', '/path/|'),
+     ('/', '/test/path with spaces|', 'path with spaces', '/test/|'),
+     ('/', r'/test/path\backslashes\eww|', r'path\backslashes\eww', '/test/|'),
+-    pytest.param('\\', 'path|', 'path', '|', marks=fixme),
+-    ('\\', 'path|', 'ath', 'p|'),  # wrong
++    ('\\', 'path|', 'path', '|'),
+     ('\\', r'C:\path|', 'path', r'C:\|'),
+     ('\\', r'C:\path\sub|', 'sub', r'C:\path\|'),
+     ('\\', r'C:\test\path with spaces|', 'path with spaces', r'C:\test\|'),
