@@ -11,16 +11,3 @@ index 6f7abeaab..4fb7dfea5 100644
          QTimer.singleShot(0, lambda: self.finished.emit())
  
      def abort(self):
-diff --git a/tests/unit/browser/webkit/network/test_networkreply.py b/tests/unit/browser/webkit/network/test_networkreply.py
-index 5de31bf0f..fc400c1b2 100644
---- a/tests/unit/browser/webkit/network/test_networkreply.py
-+++ b/tests/unit/browser/webkit/network/test_networkreply.py
-@@ -78,7 +78,7 @@ def test_error_network_reply(qtbot, req):
-     reply = networkreply.ErrorNetworkReply(
-         req, "This is an error", QNetworkReply.NetworkError.UnknownNetworkError)
- 
--    with qtbot.wait_signals([reply.error, reply.finished], order='strict'):
-+    with qtbot.wait_signals([reply.errorOccurred, reply.finished], order='strict'):
-         pass
- 
-     reply.abort()  # shouldn't do anything
