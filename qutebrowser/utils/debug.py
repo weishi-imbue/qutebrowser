@@ -194,9 +194,41 @@ def signal_name(sig: pyqtSignal) -> str:
     Return:
         The cleaned up signal name.
     """
-    m = re.fullmatch(r'[0-9]+(.*)\(.*\)', sig.signal)  # type: ignore
-    assert m is not None
-    return m.group(1)
+    # For bound signals (objects exposing `signal`)
+    if hasattr(sig, 'signal'):
+        m = re.search(r'(?:[0-9]+)?([^(]+)', sig.signal)  # type: ignore
+        if m is not None:
+            return m.group(1)
+
+    # For unbound signals on PyQt >= 5.11 (objects exposing `signatures`)
+    if hasattr(sig, 'signatures'):
+        if sig.signatures:  # type: ignore
+            first_signature = sig.signatures[0]  # type: ignore
+            m = re.search(r'([^(]+)', first_signature)
+            if m is not None:
+                return m.group(1)
+
+    # For unbound signals on PyQt < 5.11 (objects without `signatures`)
+    # Analyze repr(sig) using predefined regex patterns for legacy PyQt formats
+    sig_repr = repr(sig)
+
+    # Try various legacy PyQt format patterns
+    patterns = [
+        r'<unbound PYQT_SIGNAL ([^(]+)',                    # <unbound PYQT_SIGNAL signalName(...)>
+        r'<bound PYQT_SIGNAL ([^(]+)',                      # <bound PYQT_SIGNAL signalName(...)>
+        r'pyqtSignal\(.*name=[\'"\'"]([^\'\"\'\"]+)',       # pyqtSignal(..., name='signalName')
+        r'<pyqtSignal ([^<>]+)>',                           # <pyqtSignal signalName>
+        r'\.([^.(]+)(?:\(|$)',                              # Extract name after dot before ( or end
+        r'(\w+)(?:\(|$)',                                   # Word characters before ( or end
+    ]
+
+    for pattern in patterns:
+        m = re.search(pattern, sig_repr)
+        if m is not None:
+            return m.group(1)
+
+    # Fallback - return string representation
+    return str(sig)
 
 
 def format_args(args: typing.Sequence = None,
