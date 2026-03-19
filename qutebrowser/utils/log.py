@@ -32,6 +32,7 @@ from typing import (TYPE_CHECKING, Any, Iterator, Mapping, MutableSequence,
                     Optional, Set, Tuple, Union, TextIO, Literal, cast)
 
 from qutebrowser.utils import qtlog
+from qutebrowser.utils.qtlog import hide_qt_warning
 # Optional imports
 try:
     import colorama
@@ -359,18 +360,6 @@ def change_console_formatter(level: int) -> None:
         assert isinstance(old_formatter, JSONFormatter), old_formatter
 
 
-@contextlib.contextmanager
-def hide_qt_warning(pattern: str, logger: str = 'qt') -> Iterator[None]:
-    """Hide Qt warnings matching the given regex."""
-    log_filter = QtWarningFilter(pattern)
-    logger_obj = logging.getLogger(logger)
-    logger_obj.addFilter(log_filter)
-    try:
-        yield
-    finally:
-        logger_obj.removeFilter(log_filter)
-
-
 def init_from_config(conf: 'configmodule.ConfigContainer') -> None:
     """Initialize logging settings from the config.
 
@@ -399,24 +388,6 @@ def init_from_config(conf: 'configmodule.ConfigContainer') -> None:
             level = LOG_LEVELS[consolelevel.upper()]
             console_handler.setLevel(level)
             change_console_formatter(level)
-
-
-class QtWarningFilter(logging.Filter):
-
-    """Filter to filter Qt warnings.
-
-    Attributes:
-        _pattern: The start of the message.
-    """
-
-    def __init__(self, pattern: str) -> None:
-        super().__init__()
-        self._pattern = pattern
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        """Determine if the specified record is to be logged."""
-        do_log = not record.msg.strip().startswith(self._pattern)
-        return do_log
 
 
 class InvalidLogFilterError(Exception):
