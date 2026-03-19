@@ -153,10 +153,52 @@ _JS_LOGMAP: Mapping[str, Callable[[str], None]] = {
 # Callables to use for content.javascript.log_message.
 # Note that the keys are JS log levels here, not config settings!
 _JS_LOGMAP_MESSAGE: Mapping[usertypes.JsLogLevel, Callable[[str], None]] = {
+    usertypes.JsLogLevel.unknown: message.info,  # unknown messages default to info
     usertypes.JsLogLevel.info: message.info,
     usertypes.JsLogLevel.warning: message.warning,
     usertypes.JsLogLevel.error: message.error,
 }
+
+
+def _js_log_to_ui(
+    level: usertypes.JsLogLevel,
+    source: str,
+    line: int,
+    msg: str,
+) -> bool:
+    """Check if a JavaScript message should be displayed in the UI.
+
+    Args:
+        level: The log level of the message
+        source: The source location (e.g. "userscript:_qute_stylesheet")
+        line: The line number
+        msg: The message content
+
+    Returns:
+        True if the message should be displayed in the UI, False otherwise.
+    """
+    # First check if the level is enabled for this source in levels config
+    levels_config = config.cache['content.javascript.log_message.levels']
+    level_enabled = False
+
+    for pattern, levels in levels_config.items():
+        if fnmatch.fnmatchcase(source, pattern) and level.name in levels:
+            level_enabled = True
+            break
+
+    if not level_enabled:
+        return False
+
+    # Then check if the message should be excluded
+    excludes_config = config.cache['content.javascript.log_message.excludes']
+
+    for pattern, exclude_patterns in excludes_config.items():
+        if fnmatch.fnmatchcase(source, pattern):
+            for exclude_pattern in exclude_patterns:
+                if fnmatch.fnmatchcase(msg, exclude_pattern):
+                    return False
+
+    return True
 
 
 def javascript_log_message(
@@ -168,11 +210,10 @@ def javascript_log_message(
     """Display a JavaScript log message."""
     logstring = f"[{source}:{line}] {msg}"
 
-    for pattern, levels in config.cache['content.javascript.log_message'].items():
-        if level.name in levels and fnmatch.fnmatchcase(source, pattern):
-            func = _JS_LOGMAP_MESSAGE[level]
-            func(f"JS: {logstring}")
-            return
+    if _js_log_to_ui(level, source, line, msg):
+        func = _JS_LOGMAP_MESSAGE[level]
+        func(f"JS: {logstring}")
+        return
 
     logger = _JS_LOGMAP[config.cache['content.javascript.log'][level.name]]
     logger(logstring)
