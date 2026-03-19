@@ -4,10 +4,11 @@
 
 """The main browser widget for QtWebEngine."""
 
-from typing import List, Iterable
+import mimetypes
+from typing import List, Iterable, Set
 
 from qutebrowser.qt import machinery
-from qutebrowser.qt.core import pyqtSignal, pyqtSlot, QUrl
+from qutebrowser.qt.core import pyqtSignal, pyqtSlot, QUrl, qVersion
 from qutebrowser.qt.gui import QPalette
 from qutebrowser.qt.webenginewidgets import QWebEngineView
 from qutebrowser.qt.webenginecore import QWebEnginePage, QWebEngineCertificateError
@@ -258,6 +259,53 @@ class WebEnginePage(QWebEnginePage):
         self.navigation_request.emit(navigation)
         return navigation.accepted
 
+    @staticmethod
+    def extra_suffixes_workaround(upstream_mimetypes: Iterable[str]) -> Set[str]:
+        """Return additional file suffixes for mimetypes to work around QTBUG-116905.
+
+        This method returns additional file suffixes (extensions) for the given set
+        of upstream mimetypes. It serves as a workaround for a known Qt bug
+        (QTBUG-116905), which affects only specific versions (greater than 6.2.2
+        and less than 6.7.0). It ensures that any missing suffixes are derived
+        and included, avoiding duplication of suffixes already present in the input.
+
+        Args:
+            upstream_mimetypes: A list of mimetypes or file suffixes that will be
+                              evaluated to compute any missing extensions.
+
+        Returns:
+            A set of additional file suffixes that are valid for the given mimetypes
+            but not already present in the input.
+        """
+        # Only run on affected Qt versions (> 6.2.2 and < 6.7.0)
+        qt_version = qVersion()
+        version_parts = tuple(map(int, qt_version.split('.')))
+
+        # Check if version is in affected range
+        if not ((6, 2, 2) < version_parts < (6, 7, 0)):
+            return set()
+
+        upstream_list = list(upstream_mimetypes)
+
+        # Separate existing suffixes from mimetypes
+        existing_suffixes = set()
+        mimetypes_to_process = []
+
+        for item in upstream_list:
+            if item.startswith('.'):
+                existing_suffixes.add(item)
+            elif '/' in item:
+                mimetypes_to_process.append(item)
+
+        # Get all possible suffixes for the mimetypes
+        all_suffixes = set()
+        for mimetype in mimetypes_to_process:
+            extensions = mimetypes.guess_all_extensions(mimetype)
+            all_suffixes.update(extensions)
+
+        # Return only the missing suffixes
+        return all_suffixes - existing_suffixes
+
     def chooseFiles(
         self,
         mode: QWebEnginePage.FileSelectionMode,
@@ -265,9 +313,14 @@ class WebEnginePage(QWebEnginePage):
         accepted_mimetypes: Iterable[str],
     ) -> List[str]:
         """Override chooseFiles to (optionally) invoke custom file uploader."""
+        # Apply workaround for QTBUG-116905
+        extra_suffixes = self.extra_suffixes_workaround(accepted_mimetypes)
+        updated_mimetypes = list(accepted_mimetypes)
+        updated_mimetypes.extend(extra_suffixes)
+
         handler = config.val.fileselect.handler
         if handler == "default":
-            return super().chooseFiles(mode, old_files, accepted_mimetypes)
+            return super().chooseFiles(mode, old_files, updated_mimetypes)
         assert handler == "external", handler
         try:
             qb_mode = _QB_FILESELECTION_MODES[mode]
@@ -275,6 +328,6 @@ class WebEnginePage(QWebEnginePage):
             log.webview.warning(
                 f"Got file selection mode {mode}, but we don't support that!"
             )
-            return super().chooseFiles(mode, old_files, accepted_mimetypes)
+            return super().chooseFiles(mode, old_files, updated_mimetypes)
 
         return shared.choose_file(qb_mode=qb_mode)
