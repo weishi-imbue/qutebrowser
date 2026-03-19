@@ -87,9 +87,49 @@ def test_result(qapp, caplog):
         b"QtWebEngine/5.15.9 Chrome/87.0.4280.144\x00",
         elf.Versions("5.15.9", "87.0.4280.144"),
     ),
+    # Qt 6.4+ fallback scenario: partial match with full version found separately
+    (
+        b"some_garbage\x00QtWebEngine/6.4.2 Chrome/102.0.5005other_data"
+        b"more_data\x00102.0.5005.149\x00even_more_data",
+        elf.Versions("6.4.2", "102.0.5005.149"),
+    ),
+    # Complex case with multiple partial patterns but correct full version
+    (
+        b"prefix_data\x00QtWebEngine/6.5.1 Chrome/110.0.5481incomplete"
+        b"middle_section\x00110.0.5481.77\x00suffix_data",
+        elf.Versions("6.5.1", "110.0.5481.77"),
+    ),
 ])
 def test_find_versions(data, expected):
     assert elf._find_versions(data) == expected
+
+
+@pytest.mark.parametrize("data, expected_error", [
+    # No match at all
+    (
+        b"completely_unrelated_data_with_no_version_info",
+        "No match in .rodata"
+    ),
+    # Partial match but chromium version too short
+    (
+        b"\x00QtWebEngine/6.4.2 Chrome/102.0other_data",
+        "Inconclusive partial Chromium bytes"
+    ),
+    # Partial match but chromium version has no dot
+    (
+        b"\x00QtWebEngine/6.4.2 Chrome/1020505149other_data",
+        "Inconclusive partial Chromium bytes"
+    ),
+    # Partial match but full version not found
+    (
+        b"\x00QtWebEngine/6.4.2 Chrome/102.0.5005other_data_without_full_version",
+        "No match in .rodata for full version"
+    ),
+])
+def test_find_versions_errors(data, expected_error):
+    with pytest.raises(elf.ParseError) as excinfo:
+        elf._find_versions(data)
+    assert str(excinfo.value) == expected_error
 
 
 @hypothesis.given(data=hst.builds(
