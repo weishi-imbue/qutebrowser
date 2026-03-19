@@ -348,6 +348,17 @@ class Config(QObject):
                 name, deleted=deleted, renamed=renamed)
             raise exception from None
 
+    def ensure_has_opt(self, name: str) -> None:
+        """Validate that a configuration option exists.
+
+        Args:
+            name: The name of the configuration option to check.
+
+        Raises:
+            configexc.NoOptionError: If the option doesn't exist.
+        """
+        self.get_opt(name)
+
     def get(self,
             name: str,
             url: QUrl = None, *,
