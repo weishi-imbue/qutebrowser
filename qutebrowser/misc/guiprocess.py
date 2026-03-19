@@ -181,14 +181,14 @@ class GUIProcess(QObject):
         self._cleanup_timer.setSingleShot(True)
 
         self._proc = QProcess(self)
-        self._proc.setReadChannel(QProcess.StandardOutput)
         self._proc.errorOccurred.connect(self._on_error)
         self._proc.errorOccurred.connect(self.error)
         self._proc.finished.connect(self._on_finished)
         self._proc.finished.connect(self.finished)
         self._proc.started.connect(self._on_started)
         self._proc.started.connect(self.started)
-        self._proc.readyRead.connect(self._on_ready_read)  # type: ignore[attr-defined]
+        self._proc.readyReadStandardOutput.connect(self._on_ready_read_stdout)
+        self._proc.readyReadStandardError.connect(self._on_ready_read_stderr)
 
         if additional_env is not None:
             procenv = QProcessEnvironment.systemEnvironment()
@@ -207,11 +207,12 @@ class GUIProcess(QObject):
         return qba.data().decode(encoding, 'replace')
 
     @pyqtSlot()
-    def _on_ready_read(self) -> None:
+    def _on_ready_read_stdout(self) -> None:
         if not self._output_messages:
             return
 
         while True:
+            self._proc.setReadChannel(QProcess.StandardOutput)
             text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
             if not text:
                 break
@@ -228,7 +229,22 @@ class GUIProcess(QObject):
 
             self.stdout += text
 
-        message.info(self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+        message.info(self._elide_output(self.stdout), replace=f"stdout-{id(self)}")
+
+    @pyqtSlot()
+    def _on_ready_read_stderr(self) -> None:
+        if not self._output_messages:
+            return
+
+        while True:
+            self._proc.setReadChannel(QProcess.StandardError)
+            text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
+            if not text:
+                break
+
+            self.stderr += text
+
+        message.error(self._elide_output(self.stderr), replace=f"stderr-{id(self)}")
 
     @pyqtSlot(QProcess.ProcessError)
     def _on_error(self, error: QProcess.ProcessError) -> None:
@@ -287,11 +303,13 @@ class GUIProcess(QObject):
         self.stdout += self._decode_data(self._proc.readAllStandardOutput())
 
         if self._output_messages:
+            # Final summary: stdout first (info level), then stderr (error level)
+            # Only show final summaries for streams that actually produced output
             if self.stdout:
                 message.info(
-                    self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+                    self._elide_output(self.stdout), replace=f"stdout-{id(self)}")
             if self.stderr:
-                message.error(self._elide_output(self.stderr))
+                message.error(self._elide_output(self.stderr), replace=f"stderr-{id(self)}")
 
         if self.outcome.was_successful():
             if self.verbose:
