@@ -88,6 +88,10 @@ def get_argparser():
                         "application. Used to set the app_id under Wayland. See "
                         "https://doc.qt.io/qt-5/qguiapplication.html#desktopFileName-prop")
 
+    parser.add_argument('--untrusted-args', action='store_true',
+                        help="All following arguments are treated as URLs or search "
+                        "terms, not flags or commands.")
+
     parser.add_argument('--json-args', help=argparse.SUPPRESS)
     parser.add_argument('--temp-basedir-restarted',
                         help=argparse.SUPPRESS,
@@ -207,7 +211,39 @@ def _unpack_json_args(args):
     return argparse.Namespace(**new_args)
 
 
+def _validate_untrusted_args(argv):
+    """Validate usage of the --untrusted-args flag.
+
+    Args:
+        argv: Command line arguments list
+
+    Raises:
+        SystemExit: If validation fails
+    """
+    try:
+        untrusted_index = argv.index('--untrusted-args')
+    except ValueError:
+        # --untrusted-args not present, validation passes
+        return
+
+    # Get arguments after --untrusted-args
+    args_after = argv[untrusted_index + 1:]
+
+    # Check if multiple arguments are provided
+    if len(args_after) > 1:
+        args_str = ' '.join(args_after)
+        sys.stderr.write(f"Found multiple arguments ({args_str}) after --untrusted-args, aborting.\n")
+        sys.exit(1)
+
+    # Check if any argument starts with - or :
+    for arg in args_after:
+        if arg.startswith('-') or arg.startswith(':'):
+            sys.stderr.write(f"Found {arg} after --untrusted-args, aborting.\n")
+            sys.exit(1)
+
+
 def main():
+    _validate_untrusted_args(sys.argv)
     parser = get_argparser()
     argv = sys.argv[1:]
     args = parser.parse_args(argv)
