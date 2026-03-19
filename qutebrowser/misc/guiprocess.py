@@ -189,6 +189,7 @@ class GUIProcess(QObject):
         self._proc.started.connect(self._on_started)
         self._proc.started.connect(self.started)
         self._proc.readyRead.connect(self._on_ready_read)  # type: ignore[attr-defined]
+        self._proc.readyReadStandardError.connect(self._on_ready_read)  # type: ignore[attr-defined]
 
         if additional_env is not None:
             procenv = QProcessEnvironment.systemEnvironment()
@@ -240,6 +241,16 @@ class GUIProcess(QObject):
             text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
             if not text:
                 break
+
+            if '\r' in text and not utils.is_windows:
+                # Crude handling of CR for e.g. progress output.
+                # Discard everything before the last \r in the new input, then discard
+                # everything after the last \n in self.stderr.
+                text = text.rsplit('\r', maxsplit=1)[-1]
+                if '\n' in self.stderr:
+                    self.stderr = self.stderr.rsplit('\n', maxsplit=1)[0] + '\n'
+                else:
+                    self.stderr = ''
 
             self.stderr += text
             stderr_had_data = True
