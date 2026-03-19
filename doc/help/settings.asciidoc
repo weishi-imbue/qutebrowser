@@ -172,7 +172,8 @@
 |<<content.javascript.clipboard,content.javascript.clipboard>>|Allow JavaScript to read from or write to the clipboard.
 |<<content.javascript.enabled,content.javascript.enabled>>|Enable JavaScript.
 |<<content.javascript.log,content.javascript.log>>|Log levels to use for JavaScript console logging messages.
-|<<content.javascript.log_message,content.javascript.log_message>>|Javascript message sources/levels to show in the qutebrowser UI.
+|<<content.javascript.log_message.levels,content.javascript.log_message.levels>>|Javascript message sources/levels to show in the qutebrowser UI.
+|<<content.javascript.log_message.excludes,content.javascript.log_message.excludes>>|Javascript message patterns to exclude from the qutebrowser UI.
 |<<content.javascript.modal_dialog,content.javascript.modal_dialog>>|Use the standard JavaScript modal dialog for `alert()` and `confirm()`.
 |<<content.javascript.prompt,content.javascript.prompt>>|Show javascript prompts.
 |<<content.local_content_can_access_file_urls,content.local_content_can_access_file_urls>>|Allow locally loaded documents to access other local URLs.
@@ -2401,15 +2402,15 @@ Default:
 - +pass:[unknown]+: +pass:[debug]+
 - +pass:[warning]+: +pass:[debug]+
 
-[[content.javascript.log_message]]
-=== content.javascript.log_message
+[[content.javascript.log_message.levels]]
+=== content.javascript.log_message.levels
 Javascript message sources/levels to show in the qutebrowser UI.
 When a JavaScript message is logged from a location matching the glob pattern given in the key, and is from one of the levels listed as value, it's surfaced as a message in the qutebrowser UI.
 By default, errors happening in qutebrowser internally or in userscripts are shown to the user.
 
 Type: <<types,Dict>>
 
-Default: 
+Default:
 
 - +pass:[qute:*]+:
 
@@ -2417,6 +2418,16 @@ Default:
 - +pass:[userscript:*]+:
 
 * +pass:[error]+
+
+[[content.javascript.log_message.excludes]]
+=== content.javascript.log_message.excludes
+Javascript message patterns to exclude from the qutebrowser UI.
+This is a dictionary mapping source glob patterns (like those used in content.javascript.log_message.levels) to lists of message glob patterns to exclude from being shown in the UI.
+Messages matching both a source pattern in content.javascript.log_message.levels and an exclusion pattern here will be suppressed, allowing fine-grained filtering of repetitive or non-actionable messages like Content Security Policy violations.
+
+Type: <<types,Dict>>
+
+Default: +pass:[{}]+
 
 [[content.javascript.modal_dialog]]
 === content.javascript.modal_dialog
