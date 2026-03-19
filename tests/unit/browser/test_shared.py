@@ -35,6 +35,29 @@ def test_custom_headers(config_stub, dnt, accept_language, custom_headers,
     assert shared.custom_headers(url=None) == expected_items
 
 
+@pytest.mark.parametrize('fallback_accept_language, accept_language_config, expected_header', [
+    # Default behavior: fallback_accept_language=True (normal behavior)
+    (True, 'en-US', b'en-US'),
+    (True, None, None),
+    # XHR behavior: fallback_accept_language=False (should not use global setting)
+    (False, 'en-US', None),  # Should not include Accept-Language when fallback=False
+])
+def test_custom_headers_fallback_accept_language(config_stub, fallback_accept_language,
+                                                 accept_language_config, expected_header):
+    """Test the new fallback_accept_language parameter for XHR requests."""
+    config_stub.val.content.headers.accept_language = accept_language_config
+    config_stub.val.content.headers.do_not_track = None  # Disable to focus on Accept-Language
+    config_stub.val.content.headers.custom = {}  # Empty custom headers
+
+    headers_list = shared.custom_headers(url=None, fallback_accept_language=fallback_accept_language)
+    headers_dict = dict(headers_list)
+
+    if expected_header is None:
+        assert b'Accept-Language' not in headers_dict
+    else:
+        assert headers_dict[b'Accept-Language'] == expected_header
+
+
 @pytest.mark.parametrize(
     (
         "levels_setting, excludes_setting, level, source, msg, expected_ret, "
