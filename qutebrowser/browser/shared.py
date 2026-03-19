@@ -26,7 +26,7 @@ class CallSuper(Exception):
     """Raised when the caller should call the superclass instead."""
 
 
-def custom_headers(url):
+def custom_headers(url, *, fallback_accept_language=True):
     """Get the combined custom headers."""
     headers = {}
 
@@ -41,8 +41,19 @@ def custom_headers(url):
         encoded_value = b"" if value is None else value.encode('ascii')
         headers[encoded_header] = encoded_value
 
-    accept_language = config.instance.get('content.headers.accept_language',
-                                          url=url)
+    # Handle Accept-Language header based on fallback_accept_language parameter
+    if fallback_accept_language or url is None:
+        # Use normal behavior: get value with fallback to global setting
+        accept_language = config.instance.get('content.headers.accept_language',
+                                              url=url)
+    else:
+        # Only use domain-specific override, don't fallback to global setting
+        accept_language = config.instance.get('content.headers.accept_language',
+                                              url=url, fallback=False)
+        # If no domain-specific override exists, we get usertypes.UNSET
+        if accept_language is usertypes.UNSET:
+            accept_language = None
+
     if accept_language is not None:
         headers[b'Accept-Language'] = accept_language.encode('ascii')
 
