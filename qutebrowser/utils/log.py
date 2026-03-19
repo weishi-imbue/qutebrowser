@@ -32,7 +32,7 @@ from typing import (TYPE_CHECKING, Any, Iterator, Mapping, MutableSequence,
                     Optional, Set, Tuple, Union, TextIO, Literal, cast)
 
 from qutebrowser.utils import qtlog
-from qutebrowser.utils.qtlog import hide_qt_warning, QtWarningFilter
+from qutebrowser.utils.qtlog import hide_qt_warning
 # Optional imports
 try:
     import colorama
@@ -360,8 +360,6 @@ def change_console_formatter(level: int) -> None:
         assert isinstance(old_formatter, JSONFormatter), old_formatter
 
 
-
-
 def init_from_config(conf: 'configmodule.ConfigContainer') -> None:
     """Initialize logging settings from the config.
 
@@ -390,8 +388,6 @@ def init_from_config(conf: 'configmodule.ConfigContainer') -> None:
             level = LOG_LEVELS[consolelevel.upper()]
             console_handler.setLevel(level)
             change_console_formatter(level)
-
-
 
 
 class InvalidLogFilterError(Exception):
