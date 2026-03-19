@@ -196,6 +196,10 @@ class RequestInterceptor(QWebEngineUrlRequestInterceptor):
                 # We shouldn't break that if someone sets a custom Accept header for
                 # normal requests.
                 continue
+            if header.lower() == b'accept-language' and is_xhr:
+                # Similar to Accept header: don't override Accept-Language headers
+                # that may have been set by JavaScript in XHR requests
+                continue
             info.setHttpHeader(header, value)
 
         if config.cache['content.headers.referer'] == 'never':
