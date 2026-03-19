@@ -170,32 +170,37 @@ def test_start_output_message(proc, qtbot, caplog, message_mock, py_proc,
             proc.start(cmd, args)
 
     if stdout and stderr:
-        stdout_msg = message_mock.messages[0]
-        stderr_msg = message_mock.messages[-1]
-        msg_count = 3  # stdout is reported twice (once live)
+        msg_count = 4  # stdout is reported twice (once live), stderr is reported twice (once live)
     elif stdout:
-        stdout_msg = message_mock.messages[0]
-        stderr_msg = None
         msg_count = 2  # stdout is reported twice (once live)
     elif stderr:
-        stdout_msg = None
-        stderr_msg = message_mock.messages[0]
-        msg_count = 1
+        msg_count = 2  # stderr is reported twice (once live)
     else:
-        stdout_msg = None
-        stderr_msg = None
         msg_count = 0
 
     assert len(message_mock.messages) == msg_count
 
-    if stdout_msg is not None:
-        assert stdout_msg.level == usertypes.MessageLevel.info
+    # Find stdout and stderr messages by level/content, not position
+    stdout_msgs = [msg for msg in message_mock.messages
+                   if msg.level == usertypes.MessageLevel.info]
+    stderr_msgs = [msg for msg in message_mock.messages
+                   if msg.level == usertypes.MessageLevel.error]
+
+    if stdout:
+        assert len(stdout_msgs) == 2, f"Expected 2 stdout messages, got {len(stdout_msgs)}"
+        stdout_msg = stdout_msgs[0]  # Take first stdout message
         assert stdout_msg.text == 'stdout text'
         assert proc.stdout.strip() == "stdout text", proc.stdout
-    if stderr_msg is not None:
-        assert stderr_msg.level == usertypes.MessageLevel.error
+    else:
+        assert len(stdout_msgs) == 0, f"Expected no stdout messages, got {len(stdout_msgs)}"
+
+    if stderr:
+        assert len(stderr_msgs) == 2, f"Expected 2 stderr messages, got {len(stderr_msgs)}"
+        stderr_msg = stderr_msgs[0]  # Take first stderr message
         assert stderr_msg.text == 'stderr text'
         assert proc.stderr.strip() == "stderr text", proc.stderr
+    else:
+        assert len(stderr_msgs) == 0, f"Expected no stderr messages, got {len(stderr_msgs)}"
 
 
 cr_skip = pytest.mark.skipif(
