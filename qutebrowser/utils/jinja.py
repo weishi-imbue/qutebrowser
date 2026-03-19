@@ -23,11 +23,14 @@ import os
 import os.path
 import contextlib
 import html
+import re
+from typing import FrozenSet
 
 import jinja2
 from PyQt5.QtCore import QUrl
 
 from qutebrowser.utils import utils, urlutils, log, qtutils
+from qutebrowser.config import configexc
 
 
 html_fallback = """
@@ -123,6 +126,39 @@ class Environment(jinja2.Environment):
 def render(template, **kwargs):
     """Render the given template and pass the given arguments to it."""
     return environment.get_template(template).render(**kwargs)
+
+
+def template_config_variables(template: str) -> FrozenSet[str]:
+    """Statically analyze a Jinja2 template to identify configuration variables.
+
+    Args:
+        template: A Jinja2 stylesheet template string.
+
+    Returns:
+        A frozenset of dot-separated configuration keys referenced within
+        the template (e.g., "hints.min_chars").
+
+    Raises:
+        configexc.NoOptionError: If a referenced configuration option
+            doesn't exist in the global configuration.
+    """
+    # Import here to avoid circular imports
+    from qutebrowser.config import config
+
+    # Regex pattern to match conf.option_name references
+    # Uses word boundary to ensure we match exactly 'conf.' and not 'notconf.'
+    # Matches conf. followed by identifier characters and dots
+    # but stops at whitespace, operators, brackets, etc.
+    pattern = r'\bconf\.([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)'
+
+    matches = re.findall(pattern, template)
+    config_vars = set(matches)
+
+    # Validate that all found configuration options exist
+    for var in config_vars:
+        config.instance.ensure_has_opt(var)
+
+    return frozenset(config_vars)
 
 
 environment = Environment()
