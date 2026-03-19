@@ -48,6 +48,16 @@ logger = logging.getLogger("network")
 ad_blocker: Optional["BraveAdBlocker"] = None
 
 
+class DeserializationError(Exception):
+    """Exception raised when loading cached filter data fails.
+
+    Public exception used to normalize adblock deserialization errors across
+    adblock versions; raised when loading the cached filter data fails in
+    BraveAdBlocker.read_cache().
+    """
+    pass
+
+
 def _should_be_used() -> bool:
     """Whether the Brave adblocker should be used or not.
 
@@ -213,13 +223,38 @@ class BraveAdBlocker:
             logger.debug("Loading cached adblock data: %s", self._cache_path)
             try:
                 self._engine.deserialize_from_file(str(self._cache_path))
-            except ValueError as e:
-                if str(e) != "DeserializationError":
-                    # All Rust exceptions get turned into a ValueError by
-                    # python-adblock
-                    raise
-                message.error("Reading adblock filter data failed (corrupted data?). "
-                              "Please run :adblock-update.")
+            except (ValueError, OSError, IOError, EOFError, UnicodeDecodeError) as e:
+                # Normalize various deserialization errors into our custom exception
+                if isinstance(e, ValueError):
+                    if str(e) == "DeserializationError":
+                        # Known Rust deserialization error from python-adblock
+                        raise DeserializationError("Cache file contains corrupted data") from e
+                    else:
+                        # Other ValueError that might indicate corruption
+                        raise DeserializationError(f"Invalid cache file format: {e}") from e
+                elif isinstance(e, (OSError, IOError)):
+                    # File I/O errors during reading
+                    raise DeserializationError(f"Unable to read cache file: {e}") from e
+                elif isinstance(e, EOFError):
+                    # Truncated or incomplete cache file
+                    raise DeserializationError("Cache file appears to be truncated or incomplete") from e
+                elif isinstance(e, UnicodeDecodeError):
+                    # Encoding issues in cache file
+                    raise DeserializationError(f"Cache file encoding error: {e}") from e
+            except DeserializationError:
+                # Handle our normalized deserialization error
+                logger.error("Adblock cache file is corrupted and could not be loaded",
+                           exc_info=True)
+                message.error("Failed to load adblock filter data due to cache corruption. "
+                              "The adblock functionality will be disabled until you run "
+                              ":adblock-update to download fresh filter lists.")
+                return
+            except Exception as e:
+                # Catch any other unexpected errors to prevent crashes
+                logger.error("Unexpected error while loading adblock cache", exc_info=True)
+                message.error("An unexpected error occurred while loading adblock filters. "
+                              "Please run :adblock-update to regenerate the cache.")
+                return
         else:
             if (
                 config.val.content.blocking.adblock.lists
