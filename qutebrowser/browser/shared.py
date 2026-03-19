@@ -45,8 +45,9 @@ def custom_headers(url, *, fallback_accept_language=True):
                                           url=url)
     if accept_language is not None:
         # Check if we have a domain-specific override or if fallback is enabled
-        global_accept_language = config.instance.get('content.headers.accept_language')
-        has_domain_override = accept_language != global_accept_language
+        url_specific = config.instance.get('content.headers.accept_language',
+                                           url=url, fallback=False)
+        has_domain_override = url_specific is not usertypes.UNSET
 
         if fallback_accept_language or has_domain_override:
             headers[b'Accept-Language'] = accept_language.encode('ascii')
