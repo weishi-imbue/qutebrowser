@@ -48,6 +48,14 @@ logger = logging.getLogger("network")
 ad_blocker: Optional["BraveAdBlocker"] = None
 
 
+class DeserializationError(Exception):
+    """Exception raised when loading cached filter data fails in BraveAdBlocker.read_cache().
+
+    This exception is used to normalize adblock deserialization errors across
+    adblock versions and signal cache deserialization failures.
+    """
+
+
 def _should_be_used() -> bool:
     """Whether the Brave adblocker should be used or not.
 
@@ -218,8 +226,15 @@ class BraveAdBlocker:
                     # All Rust exceptions get turned into a ValueError by
                     # python-adblock
                     raise
-                message.error("Reading adblock filter data failed (corrupted data?). "
-                              "Please run :adblock-update.")
+                # Normalize the adblock deserialization error
+                raise DeserializationError("Cache deserialization failed") from e
+            except DeserializationError:
+                # Handle corrupted cache files gracefully
+                message.error("Reading adblock filter data failed (corrupted cache file). "
+                              "Please update the adblock filters to resolve this issue.")
+                logger.error("Adblock cache file is corrupted: %s", self._cache_path)
+                # Continue normal operation - the application should not crash
+                return
         else:
             if (
                 config.val.content.blocking.adblock.lists
