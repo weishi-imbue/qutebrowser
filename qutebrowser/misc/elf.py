@@ -268,17 +268,51 @@ def _find_versions(data: bytes) -> Versions:
     Note that 'data' can actually be a mmap.mmap, but typing doesn't handle that
     correctly: https://github.com/python/typeshed/issues/1467
     """
+    # First try to match the complete combined pattern
     match = re.search(
         br'\x00QtWebEngine/([0-9.]+) Chrome/([0-9.]+)\x00',
         data,
     )
-    if match is None:
+    if match is not None:
+        try:
+            return Versions(
+                webengine=match.group(1).decode('ascii'),
+                chromium=match.group(2).decode('ascii'),
+            )
+        except UnicodeDecodeError as e:
+            raise ParseError(e)
+
+    # If combined match fails, try partial match (without trailing null byte)
+    partial_match = re.search(
+        br'\x00QtWebEngine/([0-9.]+) Chrome/([0-9.]+)',
+        data,
+    )
+    if partial_match is None:
         raise ParseError("No match in .rodata")
+
+    # Extract the partial version bytes
+    webengine_bytes = partial_match.group(1)
+    partial_chromium_bytes = partial_match.group(2)
+
+    # Validate partial chromium bytes
+    if b'.' not in partial_chromium_bytes or len(partial_chromium_bytes) < 6:
+        raise ParseError("Inconclusive partial Chromium bytes")
+
+    # Search for the full chromium version string
+    escaped_partial = re.escape(partial_chromium_bytes)
+    full_chromium_pattern = b'\x00' + escaped_partial + br'[0-9.]+\x00'
+
+    chromium_match = re.search(full_chromium_pattern, data)
+    if chromium_match is None:
+        raise ParseError("No match in .rodata for full version")
+
+    # Extract full chromium version (remove null bytes)
+    chromium_bytes = chromium_match.group(0)[1:-1]  # Remove leading and trailing null bytes
 
     try:
         return Versions(
-            webengine=match.group(1).decode('ascii'),
-            chromium=match.group(2).decode('ascii'),
+            webengine=webengine_bytes.decode('ascii'),
+            chromium=chromium_bytes.decode('ascii'),
         )
     except UnicodeDecodeError as e:
         raise ParseError(e)
