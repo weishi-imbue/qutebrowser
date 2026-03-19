@@ -24,7 +24,7 @@ from typing import Dict, Sequence
 from PyQt5.QtCore import QAbstractItemModel
 
 from qutebrowser.completion.models import (completionmodel, listcategory,
-                                           histcategory)
+                                           histcategory, filepathcategory)
 from qutebrowser.browser import history
 from qutebrowser.utils import log, objreg
 from qutebrowser.config import config
@@ -92,6 +92,9 @@ def url(*, info):
     if not history_disabled and 'history' in categories:
         hist_cat = histcategory.HistoryCategory(delete_func=_delete_history)
         models['history'] = hist_cat
+
+    if 'filesystem' in categories:
+        models['filesystem'] = filepathcategory.FilePathCategory('Filesystem')
 
     for category in categories:
         if category in models:
