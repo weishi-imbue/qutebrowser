@@ -84,8 +84,46 @@ class GUIProcess(QObject):
         if error == QProcess.Crashed and not utils.is_windows:
             # Already handled via ExitStatus in _on_finished
             return
-        msg = self._proc.errorString()
-        message.error("Error while spawning {}: {}".format(self._what, msg))
+
+        error_detail = self._proc.errorString()
+
+        if error == QProcess.FailedToStart:
+            # Format: ProcessName 'command' failed to start: error_detail
+            cmd_str = "'{}'".format(self.cmd) if self.cmd else "'unknown command'"
+            msg = "{} {} failed to start: {}".format(
+                self._what.capitalize(), cmd_str, error_detail)
+
+            # Add hint on non-Windows platforms for specific errors
+            if not utils.is_windows and self.cmd:
+                if ("No such file or directory" in error_detail or
+                    "Permission denied" in error_detail):
+                    msg += " (Hint: Make sure '{}' exists and is executable)".format(self.cmd)
+
+        elif error == QProcess.Crashed:
+            msg = "{} '{}' crashed: {}".format(
+                self._what.capitalize(),
+                self.cmd if self.cmd else 'unknown command',
+                error_detail)
+        elif error == QProcess.Timedout:
+            msg = "{} '{}' timed out: {}".format(
+                self._what.capitalize(),
+                self.cmd if self.cmd else 'unknown command',
+                error_detail)
+        elif error == QProcess.WriteError:
+            msg = "{} '{}' write error: {}".format(
+                self._what.capitalize(),
+                self.cmd if self.cmd else 'unknown command',
+                error_detail)
+        elif error == QProcess.ReadError:
+            msg = "{} '{}' read error: {}".format(
+                self._what.capitalize(),
+                self.cmd if self.cmd else 'unknown command',
+                error_detail)
+        else:
+            # Fallback for any other error types
+            msg = "Error while spawning {}: {}".format(self._what, error_detail)
+
+        message.error(msg)
 
     @pyqtSlot(int, QProcess.ExitStatus)
     def _on_finished(self, code, status):
