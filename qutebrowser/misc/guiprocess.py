@@ -350,16 +350,15 @@ class GUIProcess(QObject):
             if self.stderr:
                 log.procs.error("Process stderr:\n" + self.stderr.strip())
 
-            # Handle SIGTERM differently: only show message if verbose
+            # Handle SIGTERM differently: show as info message instead of error
             if self.outcome.was_sigterm():
-                if self.verbose:
-                    message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
+                message.info(f"{str(self.outcome)} See :process {self.pid} for details.")
             else:
                 # For other unsuccessful processes, always show the error message
                 if self.verbose:
                     message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
                 else:
-                    message.error(str(self.outcome) + " See :process for details.")
+                    message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
 
     @pyqtSlot()
     def _on_started(self) -> None:
