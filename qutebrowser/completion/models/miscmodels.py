@@ -197,7 +197,7 @@ def tab_focus(*, info):
     tabs = []
     for idx in range(tabbed_browser.widget.count()):
         tab = tabbed_browser.widget.widget(idx)
-        tabs.append(("{}/{}".format(info.win_id, idx + 1),
+        tabs.append(("{}".format(idx + 1),
                      tab.url().toDisplayString(),
                      tabbed_browser.widget.page_title(idx)))
 
