@@ -1144,3 +1144,102 @@ def test_url_completion_benchmark(benchmark, info,
         model.set_pattern('ex 123')
 
     benchmark(bench)
+
+
+def test_tab_focus_completion(qtmodeltester, fake_web_tab, win_registry,
+                               tabbed_browser_stubs, info):
+    """Test tab_focus completion model.
+
+    Validates that:
+        - tabs from the current window are included
+        - tabs are formatted as win_id/tab_index
+        - special keywords (last, stack-next, stack-prev) are included
+    """
+    tabbed_browser_stubs[0].widget.tabs = [
+        fake_web_tab(QUrl('https://github.com'), 'GitHub', 0),
+        fake_web_tab(QUrl('https://wikipedia.org'), 'Wikipedia', 1),
+        fake_web_tab(QUrl('https://duckduckgo.com'), 'DuckDuckGo', 2),
+    ]
+    tabbed_browser_stubs[1].widget.tabs = [
+        fake_web_tab(QUrl('https://wiki.archlinux.org'), 'ArchWiki', 0),
+    ]
+    info.win_id = 0
+    model = miscmodels.tab_focus(info=info)
+    model.set_pattern('')
+    qtmodeltester.check(model)
+
+    _check_completions(model, {
+        '0': [
+            ('0/1', 'https://github.com', 'GitHub'),
+            ('0/2', 'https://wikipedia.org', 'Wikipedia'),
+            ('0/3', 'https://duckduckgo.com', 'DuckDuckGo'),
+        ],
+        'Special': [
+            ('last', 'Focus the last-focused tab', None),
+            ('stack-next', 'Go forward through a stack of focused tabs', None),
+            ('stack-prev', 'Go backward through a stack of focused tabs', None),
+        ]
+    })
+
+
+def test_tab_focus_completion_current_window_only(qtmodeltester, fake_web_tab,
+                                                   win_registry,
+                                                   tabbed_browser_stubs, info):
+    """Test that tab_focus only shows tabs from the current window."""
+    tabbed_browser_stubs[0].widget.tabs = [
+        fake_web_tab(QUrl('https://github.com'), 'GitHub', 0),
+        fake_web_tab(QUrl('https://wikipedia.org'), 'Wikipedia', 1),
+    ]
+    tabbed_browser_stubs[1].widget.tabs = [
+        fake_web_tab(QUrl('https://wiki.archlinux.org'), 'ArchWiki', 0),
+        fake_web_tab(QUrl('https://python.org'), 'Python', 1),
+    ]
+    # Set win_id to 1 - should only see tabs from window 1
+    info.win_id = 1
+    model = miscmodels.tab_focus(info=info)
+    model.set_pattern('')
+    qtmodeltester.check(model)
+
+    _check_completions(model, {
+        '1': [
+            ('1/1', 'https://wiki.archlinux.org', 'ArchWiki'),
+            ('1/2', 'https://python.org', 'Python'),
+        ],
+        'Special': [
+            ('last', 'Focus the last-focused tab', None),
+            ('stack-next', 'Go forward through a stack of focused tabs', None),
+            ('stack-prev', 'Go backward through a stack of focused tabs', None),
+        ]
+    })
+
+
+def test_tab_focus_completion_not_sorted(qtmodeltester, fake_web_tab,
+                                         win_registry, tabbed_browser_stubs,
+                                         info):
+    """Ensure tab_focus completion maintains tab index order.
+
+    Would be violated for more than 9 tabs if alphabetically sorted.
+    """
+    expected_tabs = []
+    for idx in range(1, 11):
+        url = "".join(random.sample(string.ascii_letters, 12))
+        title = "".join(random.sample(string.ascii_letters, 12))
+        expected_tabs.append(("0/{}".format(idx), url, title))
+
+    tabbed_browser_stubs[0].widget.tabs = [
+        fake_web_tab(QUrl(tab[1]), tab[2], idx)
+        for idx, tab in enumerate(expected_tabs)
+    ]
+    info.win_id = 0
+    model = miscmodels.tab_focus(info=info)
+    model.set_pattern('')
+    qtmodeltester.check(model)
+
+    _check_completions(model, {
+        '0': expected_tabs,
+        'Special': [
+            ('last', 'Focus the last-focused tab', None),
+            ('stack-next', 'Go forward through a stack of focused tabs', None),
+            ('stack-prev', 'Go backward through a stack of focused tabs', None),
+        ]
+    })
