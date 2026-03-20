@@ -214,7 +214,6 @@ class GUIProcess(QObject):
         stdout_had_data = False
         stderr_had_data = False
 
-        # Read stdout data (keeping original logic)
         self._proc.setReadChannel(QProcess.StandardOutput)
         while True:
             text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
@@ -310,7 +309,6 @@ class GUIProcess(QObject):
         self.stdout += self._decode_data(self._proc.readAllStandardOutput())
 
         if self._output_messages:
-            # Final summaries: stdout first (info), then stderr (error)
             if self.stdout:
                 message.info(
                     self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
