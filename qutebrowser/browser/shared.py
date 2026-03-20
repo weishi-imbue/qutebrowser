@@ -26,7 +26,7 @@ class CallSuper(Exception):
     """Raised when the caller should call the superclass instead."""
 
 
-def custom_headers(url):
+def custom_headers(url, *, fallback_accept_language=True):
     """Get the combined custom headers."""
     headers = {}
 
@@ -44,7 +44,12 @@ def custom_headers(url):
     accept_language = config.instance.get('content.headers.accept_language',
                                           url=url)
     if accept_language is not None:
-        headers[b'Accept-Language'] = accept_language.encode('ascii')
+        # Check if we have a domain-specific override or if fallback is enabled
+        global_accept_language = config.instance.get('content.headers.accept_language')
+        has_domain_override = accept_language != global_accept_language
+
+        if fallback_accept_language or has_domain_override:
+            headers[b'Accept-Language'] = accept_language.encode('ascii')
 
     return sorted(headers.items())
 
