@@ -354,12 +354,10 @@ class GUIProcess(QObject):
             if self.outcome.was_sigterm():
                 if self.verbose:
                     message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
+                # If not verbose and SIGTERM, don't show any message
             else:
-                # For other unsuccessful processes, always show the error message
-                if self.verbose:
-                    message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
-                else:
-                    message.error(str(self.outcome) + " See :process for details.")
+                # For other unsuccessful processes, always show the error message with PID
+                message.error(f"{str(self.outcome)} See :process {self.pid} for details.")
 
     @pyqtSlot()
     def _on_started(self) -> None:
