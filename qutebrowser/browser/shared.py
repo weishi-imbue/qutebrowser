@@ -27,7 +27,20 @@ class CallSuper(Exception):
 
 
 def custom_headers(url, *, fallback_accept_language=True):
-    """Get the combined custom headers."""
+    """Get the combined custom headers.
+
+    Args:
+        url: The URL to get headers for (may apply per-domain overrides).
+        fallback_accept_language: Whether to include the global Accept-Language
+            header as a fallback. When False, Accept-Language is only included
+            if there's a domain-specific override for the URL. When True (default),
+            the global Accept-Language is always included if configured.
+            This allows XHR requests to omit the global header while preserving
+            any domain-specific language settings.
+
+    Returns:
+        A sorted list of (header_name, header_value) tuples as bytes.
+    """
     headers = {}
 
     dnt_config = config.instance.get('content.headers.do_not_track', url=url)
@@ -44,7 +57,10 @@ def custom_headers(url, *, fallback_accept_language=True):
     accept_language = config.instance.get('content.headers.accept_language',
                                           url=url)
     if accept_language is not None:
-        # Check if we have a domain-specific override or if fallback is enabled
+        # When fallback_accept_language=False (e.g., for XHR requests), only include
+        # Accept-Language if there's a domain-specific override. This allows XHR
+        # requests to set their own Accept-Language header via JavaScript while
+        # still respecting per-domain configuration.
         global_accept_language = config.instance.get('content.headers.accept_language')
         has_domain_override = accept_language != global_accept_language
 
