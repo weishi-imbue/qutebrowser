@@ -179,3 +179,34 @@ def window(*, info):
     model.add_category(listcategory.ListCategory("Windows", windows))
 
     return model
+
+
+def tab_focus(*, info):
+    """A model to complete on tabs in the current window for tab-focus command."""
+    model = completionmodel.CompletionModel(column_widths=(6, 40, 54))
+
+    # Get the current window's tabbed browser
+    tabbed_browser = objreg.get('tabbed-browser', scope='window',
+                                window=info.win_id)
+
+    if not tabbed_browser.shutting_down:
+        # Add tabs from current window
+        tabs = []
+        for idx in range(tabbed_browser.widget.count()):
+            tab = tabbed_browser.widget.widget(idx)
+            tabs.append(("{}/{}".format(info.win_id, idx + 1),
+                        tab.url().toDisplayString(),
+                        tabbed_browser.widget.page_title(idx)))
+
+        if tabs:
+            model.add_category(listcategory.ListCategory(str(info.win_id), tabs, sort=False))
+
+    # Add special category with keywords
+    special_entries = [
+        ("last", "Focus the last-focused tab", None),
+        ("stack-next", "Go forward through a stack of focused tabs", None),
+        ("stack-prev", "Go backward through a stack of focused tabs", None),
+    ]
+    model.add_category(listcategory.ListCategory("Special", special_entries, sort=False))
+
+    return model
