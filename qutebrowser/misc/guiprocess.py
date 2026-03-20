@@ -211,6 +211,10 @@ class GUIProcess(QObject):
         if not self._output_messages:
             return
 
+        stdout_had_data = False
+        stderr_had_data = False
+
+        self._proc.setReadChannel(QProcess.StandardOutput)
         while True:
             text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
             if not text:
@@ -227,8 +231,26 @@ class GUIProcess(QObject):
                     self.stdout = ''
 
             self.stdout += text
+            stdout_had_data = True
 
-        message.info(self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+        # Read stderr data
+        self._proc.setReadChannel(QProcess.StandardError)
+        while True:
+            text = self._decode_data(self._proc.readLine())  # type: ignore[arg-type]
+            if not text:
+                break
+
+            self.stderr += text
+            stderr_had_data = True
+
+        # Reset to stdout channel for next readyRead signal
+        self._proc.setReadChannel(QProcess.StandardOutput)
+
+        # Update messages - stdout always, stderr only if it had data
+        if stdout_had_data and self.stdout:
+            message.info(self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
+        if stderr_had_data and self.stderr:
+            message.error(self._elide_output(self.stderr), replace=f"stderr-{self.pid}")
 
     @pyqtSlot(QProcess.ProcessError)
     def _on_error(self, error: QProcess.ProcessError) -> None:
@@ -291,7 +313,7 @@ class GUIProcess(QObject):
                 message.info(
                     self._elide_output(self.stdout), replace=f"stdout-{self.pid}")
             if self.stderr:
-                message.error(self._elide_output(self.stderr))
+                message.error(self._elide_output(self.stderr), replace=f"stderr-{self.pid}")
 
         if self.outcome.was_successful():
             if self.verbose:
