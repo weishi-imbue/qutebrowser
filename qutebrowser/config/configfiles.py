@@ -122,6 +122,20 @@ class StateConfig(configparser.ConfigParser):
         self['general']['qt_version'] = qt_version
         self['general']['version'] = qutebrowser.__version__
 
+    def init_save_manager(self,
+                          save_manager: 'savemanager.SaveManager') -> None:
+        """Make sure the config gets saved properly.
+
+        We do this outside of __init__ because the config gets created before
+        the save_manager exists.
+        """
+        save_manager.add_saveable('state-config', self._save)
+
+    def _save(self) -> None:
+        """Save the state file to the configured location."""
+        with open(self._filename, 'w', encoding='utf-8') as f:
+            self.write(f)
+
     def _set_changed_attributes(self, qt_version: str) -> None:
         """Set qt_version_changed and qutebrowser_version_changed attributes.
 
@@ -138,12 +152,21 @@ class StateConfig(configparser.ConfigParser):
             # Set Qt version change (boolean, same as before)
             self.qt_version_changed = old_qt_version != qt_version
 
-            # Set qutebrowser version change (VersionChange enum)
-            self.qutebrowser_version_changed = self._compare_versions(
+            # Set qutebrowser version change type (VersionChange enum)
+            self.qutebrowser_version_change_type = self._compare_versions(
                 old_qutebrowser_version, qutebrowser.__version__)
+
+            # Set qutebrowser version changed (boolean, for backward compatibility)
+            # If version comparison results in unknown, treat as no change for backward compatibility
+            if self.qutebrowser_version_change_type == VersionChange.unknown:
+                self.qutebrowser_version_changed = False
+            else:
+                self.qutebrowser_version_changed = (
+                    old_qutebrowser_version != qutebrowser.__version__)
         else:
             self.qt_version_changed = False
-            self.qutebrowser_version_changed = VersionChange.equal
+            self.qutebrowser_version_change_type = VersionChange.unknown
+            self.qutebrowser_version_changed = False
 
     def _compare_versions(self, old_version: Optional[str], new_version: str) -> VersionChange:
         """Compare two version strings and determine the type of change.
@@ -161,6 +184,13 @@ class StateConfig(configparser.ConfigParser):
         if old_version == new_version:
             return VersionChange.equal
 
+        # Check if version strings are valid (contain only digits, dots, and common suffixes)
+        version_pattern = re.compile(r'^[0-9]+(\.[0-9]+)*([a-zA-Z0-9\-\.]*)?$')
+        if not version_pattern.match(old_version) or not version_pattern.match(new_version):
+            log.config.warning(f"Invalid version format (old: {old_version!r}, "
+                             f"new: {new_version!r})")
+            return VersionChange.unknown
+
         try:
             old_parsed = utils.parse_version(old_version)
             new_parsed = utils.parse_version(new_version)
@@ -169,9 +199,13 @@ class StateConfig(configparser.ConfigParser):
                              f"new: {new_version!r}): {e}")
             return VersionChange.unknown
 
-        # Get version components (major, minor, patch)
+        # Check if parsing resulted in 0.0.0 (likely invalid input)
         old_segments = [old_parsed.majorVersion(), old_parsed.minorVersion(), old_parsed.microVersion()]
         new_segments = [new_parsed.majorVersion(), new_parsed.minorVersion(), new_parsed.microVersion()]
+
+        if old_segments == [0, 0, 0] and old_version != "0.0.0":
+            log.config.warning(f"Failed to parse old version string: {old_version!r}")
+            return VersionChange.unknown
 
         # Compare versions
         if new_parsed < old_parsed:
@@ -185,20 +219,6 @@ class StateConfig(configparser.ConfigParser):
         else:
             # Should not reach here since we checked equality above
             return VersionChange.equal
-
-    def init_save_manager(self,
-                          save_manager: 'savemanager.SaveManager') -> None:
-        """Make sure the config gets saved properly.
-
-        We do this outside of __init__ because the config gets created before
-        the save_manager exists.
-        """
-        save_manager.add_saveable('state-config', self._save)
-
-    def _save(self) -> None:
-        """Save the state file to the configured location."""
-        with open(self._filename, 'w', encoding='utf-8') as f:
-            self.write(f)
 
 
 class YamlConfig(QObject):
