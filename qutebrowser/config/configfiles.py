@@ -28,6 +28,7 @@ import traceback
 import configparser
 import contextlib
 import re
+import enum
 from typing import (TYPE_CHECKING, Any, Dict, Iterable, Iterator, List, Mapping,
                     MutableMapping, Optional, cast)
 
@@ -42,6 +43,45 @@ from qutebrowser.utils import standarddir, utils, qtutils, log, urlmatch
 
 if TYPE_CHECKING:
     from qutebrowser.misc import savemanager
+
+
+class VersionChange(enum.Enum):
+    """Represents the type of version change when comparing two versions.
+
+    This enum is used to determine whether a changelog should be displayed
+    after an upgrade, based on user configuration.
+    """
+
+    unknown = "unknown"
+    equal = "equal"
+    downgrade = "downgrade"
+    patch = "patch"
+    minor = "minor"
+    major = "major"
+
+    def matches_filter(self, filterstr: str) -> bool:
+        """Return whether the version change matches a given changelog_after_upgrade filter value.
+
+        Args:
+            filterstr: The filter string from changelog_after_upgrade setting.
+                      Can be values like "never", "major", "minor", "patch", etc.
+
+        Returns:
+            True if this version change should trigger changelog display based on the filter.
+        """
+        if filterstr == "never":
+            return False
+        elif filterstr == "always":
+            return True
+        elif filterstr == "major":
+            return self in (VersionChange.major,)
+        elif filterstr == "minor":
+            return self in (VersionChange.major, VersionChange.minor)
+        elif filterstr == "patch":
+            return self in (VersionChange.major, VersionChange.minor, VersionChange.patch)
+        else:
+            # Unknown filter string, be conservative and show changelog
+            return True
 
 
 # The StateConfig instance
@@ -61,18 +101,8 @@ class StateConfig(configparser.ConfigParser):
         self.read(self._filename, encoding='utf-8')
         qt_version = qVersion()
 
-        # We handle this here, so we can avoid setting qt_version_changed if
-        # the config is brand new, but can still set it when qt_version wasn't
-        # there before...
-        if 'general' in self:
-            old_qt_version = self['general'].get('qt_version', None)
-            old_qutebrowser_version = self['general'].get('version', None)
-            self.qt_version_changed = old_qt_version != qt_version
-            self.qutebrowser_version_changed = (
-                old_qutebrowser_version != qutebrowser.__version__)
-        else:
-            self.qt_version_changed = False
-            self.qutebrowser_version_changed = False
+        # Set version change attributes
+        self._set_changed_attributes(qt_version)
 
         for sect in ['general', 'geometry', 'inspector']:
             try:
@@ -105,6 +135,90 @@ class StateConfig(configparser.ConfigParser):
         """Save the state file to the configured location."""
         with open(self._filename, 'w', encoding='utf-8') as f:
             self.write(f)
+
+    def _set_changed_attributes(self, qt_version: str) -> None:
+        """Set qt_version_changed and qutebrowser_version_changed attributes.
+
+        Args:
+            qt_version: The current Qt version string.
+        """
+        # We handle this here, so we can avoid setting qt_version_changed if
+        # the config is brand new, but can still set it when qt_version wasn't
+        # there before...
+        if 'general' in self:
+            old_qt_version = self['general'].get('qt_version', None)
+            old_qutebrowser_version = self['general'].get('version', None)
+
+            # Set Qt version change (boolean, same as before)
+            self.qt_version_changed = old_qt_version != qt_version
+
+            # Set qutebrowser version change type (VersionChange enum)
+            self.qutebrowser_version_change_type = self._compare_versions(
+                old_qutebrowser_version, qutebrowser.__version__)
+
+            # Set qutebrowser version changed (boolean, for backward compatibility)
+            # If version comparison results in unknown, treat as no change for backward compatibility
+            if self.qutebrowser_version_change_type == VersionChange.unknown:
+                self.qutebrowser_version_changed = False
+            else:
+                self.qutebrowser_version_changed = (
+                    old_qutebrowser_version != qutebrowser.__version__)
+        else:
+            self.qt_version_changed = False
+            self.qutebrowser_version_change_type = VersionChange.unknown
+            self.qutebrowser_version_changed = False
+
+    def _compare_versions(self, old_version: Optional[str], new_version: str) -> VersionChange:
+        """Compare two version strings and determine the type of change.
+
+        Args:
+            old_version: The previous version string, or None if not available.
+            new_version: The current version string.
+
+        Returns:
+            A VersionChange enum value indicating the type of change.
+        """
+        if old_version is None:
+            return VersionChange.unknown
+
+        if old_version == new_version:
+            return VersionChange.equal
+
+        # Check if version strings are valid (contain only digits, dots, and common suffixes)
+        version_pattern = re.compile(r'^[0-9]+(\.[0-9]+)*([a-zA-Z0-9\-\.]*)?$')
+        if not version_pattern.match(old_version) or not version_pattern.match(new_version):
+            log.config.warning(f"Invalid version format (old: {old_version!r}, "
+                             f"new: {new_version!r})")
+            return VersionChange.unknown
+
+        try:
+            old_parsed = utils.parse_version(old_version)
+            new_parsed = utils.parse_version(new_version)
+        except Exception as e:
+            log.config.warning(f"Failed to parse version strings (old: {old_version!r}, "
+                             f"new: {new_version!r}): {e}")
+            return VersionChange.unknown
+
+        # Check if parsing resulted in 0.0.0 (likely invalid input)
+        old_segments = [old_parsed.majorVersion(), old_parsed.minorVersion(), old_parsed.microVersion()]
+        new_segments = [new_parsed.majorVersion(), new_parsed.minorVersion(), new_parsed.microVersion()]
+
+        if old_segments == [0, 0, 0] and old_version != "0.0.0":
+            log.config.warning(f"Failed to parse old version string: {old_version!r}")
+            return VersionChange.unknown
+
+        # Compare versions
+        if new_parsed < old_parsed:
+            return VersionChange.downgrade
+        elif old_segments[0] != new_segments[0]:  # major version differs
+            return VersionChange.major
+        elif old_segments[1] != new_segments[1]:  # minor version differs
+            return VersionChange.minor
+        elif old_segments[2] != new_segments[2]:  # patch version differs
+            return VersionChange.patch
+        else:
+            # Should not reach here since we checked equality above
+            return VersionChange.equal
 
 
 class YamlConfig(QObject):

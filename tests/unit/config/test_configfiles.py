@@ -174,7 +174,7 @@ def test_qt_version_changed(data_tmpdir, monkeypatch,
 ])
 def test_qutebrowser_version_changed(
         data_tmpdir, monkeypatch, old_version, new_version, changed):
-    monkeypatch.setattr(configfiles.qutebrowser, '__version__', lambda: new_version)
+    monkeypatch.setattr(configfiles.qutebrowser, '__version__', new_version)
 
     statefile = data_tmpdir / 'state'
     if old_version is not None:
@@ -186,6 +186,85 @@ def test_qutebrowser_version_changed(
 
     state = configfiles.StateConfig()
     assert state.qutebrowser_version_changed == changed
+
+
+class TestVersionChange:
+    """Tests for VersionChange enum."""
+
+    @pytest.mark.parametrize('version_change, filter_str, expected', [
+        # Test 'never' filter - always False
+        (configfiles.VersionChange.major, 'never', False),
+        (configfiles.VersionChange.minor, 'never', False),
+        (configfiles.VersionChange.patch, 'never', False),
+        (configfiles.VersionChange.equal, 'never', False),
+        # Test 'always' filter - always True
+        (configfiles.VersionChange.major, 'always', True),
+        (configfiles.VersionChange.minor, 'always', True),
+        (configfiles.VersionChange.patch, 'always', True),
+        (configfiles.VersionChange.equal, 'always', True),
+        # Test 'major' filter - only major changes
+        (configfiles.VersionChange.major, 'major', True),
+        (configfiles.VersionChange.minor, 'major', False),
+        (configfiles.VersionChange.patch, 'major', False),
+        (configfiles.VersionChange.equal, 'major', False),
+        # Test 'minor' filter - major and minor changes
+        (configfiles.VersionChange.major, 'minor', True),
+        (configfiles.VersionChange.minor, 'minor', True),
+        (configfiles.VersionChange.patch, 'minor', False),
+        (configfiles.VersionChange.equal, 'minor', False),
+        # Test 'patch' filter - major, minor, and patch changes
+        (configfiles.VersionChange.major, 'patch', True),
+        (configfiles.VersionChange.minor, 'patch', True),
+        (configfiles.VersionChange.patch, 'patch', True),
+        (configfiles.VersionChange.equal, 'patch', False),
+        # Test unknown filter - defaults to True (conservative)
+        (configfiles.VersionChange.major, 'unknown_filter', True),
+        (configfiles.VersionChange.equal, 'unknown_filter', True),
+    ])
+    def test_matches_filter(self, version_change, filter_str, expected):
+        """Test VersionChange.matches_filter method."""
+        assert version_change.matches_filter(filter_str) == expected
+
+
+@pytest.mark.parametrize('old_version, new_version, expected_type, expected_changed', [
+    # No old version - unknown type, no change flag
+    (None, '2.0.0', configfiles.VersionChange.unknown, False),
+    # Same version - equal type, no change flag
+    ('1.14.1', '1.14.1', configfiles.VersionChange.equal, False),
+    # Patch version increase - patch type, change flag
+    ('1.14.0', '1.14.1', configfiles.VersionChange.patch, True),
+    # Minor version increase - minor type, change flag
+    ('1.14.1', '1.15.0', configfiles.VersionChange.minor, True),
+    # Major version increase - major type, change flag
+    ('1.14.1', '2.0.0', configfiles.VersionChange.major, True),
+    # Version downgrade - downgrade type, change flag
+    ('2.0.0', '1.14.1', configfiles.VersionChange.downgrade, True),
+    # Unparseable old version - unknown type, no change flag
+    ('invalid-version', '1.14.1', configfiles.VersionChange.unknown, False),
+])
+def test_qutebrowser_version_change_type(
+        data_tmpdir, monkeypatch, old_version, new_version, expected_type, expected_changed, caplog):
+    """Test qutebrowser_version_change_type attribute with various version combinations."""
+    monkeypatch.setattr(configfiles.qutebrowser, '__version__', new_version)
+
+    statefile = data_tmpdir / 'state'
+    if old_version is not None:
+        data = (
+            '[general]\n'
+            f'version = {old_version}'
+        )
+        statefile.write_text(data, 'utf-8')
+
+    # Use caplog to capture expected warnings for invalid versions
+    with caplog.at_level('WARNING'):
+        state = configfiles.StateConfig()
+
+    assert state.qutebrowser_version_change_type == expected_type
+    assert state.qutebrowser_version_changed == expected_changed
+
+    # Check that warning was logged for invalid versions
+    if old_version == 'invalid-version':
+        assert 'Invalid version format' in caplog.text
 
 
 @pytest.fixture
