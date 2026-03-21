@@ -386,8 +386,14 @@ def _open_special_pages(args):
     # Show changelog on new releases
     if not configfiles.state.qutebrowser_version_changed:
         return
-    if not config.val.changelog_after_upgrade:
-        log.init.debug("Showing changelog is disabled")
+
+    # Check if changelog should be shown based on version change type and user settings
+    version_change = configfiles.state.qutebrowser_version_change_type
+    changelog_filter = config.val.changelog_after_upgrade
+
+    if not version_change.matches_filter(changelog_filter):
+        log.init.debug(f"Changelog filtered out: version change {version_change.value} "
+                      f"doesn't match filter '{changelog_filter}'")
         return
 
     try:
