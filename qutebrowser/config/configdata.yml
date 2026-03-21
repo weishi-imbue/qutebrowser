@@ -36,9 +36,16 @@ history_gap_interval:
     `:history`. Use -1 to disable separation.
 
 changelog_after_upgrade:
-  type: Bool
-  default: true
-  desc: Whether to show a changelog after qutebrowser was upgraded.
+  type:
+    name: String
+    valid_values:
+      - never: Never show changelog after upgrades
+      - patch: Show changelog after patch-level upgrades and above
+      - minor: Show changelog after minor-level upgrades and above
+      - major: Show changelog after major-level upgrades only
+      - always: Always show changelog after any version change
+  default: minor
+  desc: When to show a changelog after qutebrowser was upgraded.
 
 ignore_case:
   renamed: search.ignore_case
