@@ -4,7 +4,8 @@
 
 """The main browser widget for QtWebEngine."""
 
-from typing import List, Iterable
+import mimetypes
+from typing import List, Iterable, Set
 
 from qutebrowser.qt import machinery
 from qutebrowser.qt.core import pyqtSignal, pyqtSlot, QUrl
@@ -15,7 +16,58 @@ from qutebrowser.qt.webenginecore import QWebEnginePage, QWebEngineCertificateEr
 from qutebrowser.browser import shared
 from qutebrowser.browser.webengine import webenginesettings, certificateerror
 from qutebrowser.config import config
-from qutebrowser.utils import log, debug, usertypes
+from qutebrowser.utils import log, debug, usertypes, qtutils
+
+
+def extra_suffixes_workaround(upstream_mimetypes: Iterable[str]) -> Set[str]:
+    """Returns extra file suffixes for given mimetypes not already in the input.
+
+    Workaround for a Qt bug where some extensions (e.g., jpeg) are missing in file
+    pickers for certain Qt versions.
+
+    Args:
+        upstream_mimetypes: Iterable of MIME types and filename extensions from the browser
+
+    Returns:
+        Set of additional filename extensions that should be included
+    """
+    # Only apply workaround for affected Qt versions (≥6.2.3 and <6.7.0)
+    if not (qtutils.version_check("6.2.3") and not qtutils.version_check("6.7.0")):
+        return set()
+
+    upstream_list = list(upstream_mimetypes)
+    existing_extensions = set()
+    mime_types_to_process = set()
+
+    # Separate existing extensions from MIME types
+    for item in upstream_list:
+        if item.startswith('.'):
+            existing_extensions.add(item.lower())
+        else:
+            mime_types_to_process.add(item)
+
+    missing_extensions = set()
+
+    # Process each MIME type
+    for mimetype in mime_types_to_process:
+        if mimetype.endswith('/*'):
+            # Handle wildcard patterns like "image/*"
+            prefix = mimetype[:-2]  # Remove "/*"
+            # Get all known MIME types and find matching ones
+            for ext, known_type in mimetypes.types_map.items():
+                if known_type.startswith(prefix + '/'):
+                    # Add this extension if not already present
+                    if ext.lower() not in existing_extensions:
+                        missing_extensions.add(ext.lower())
+        else:
+            # Handle specific MIME types like "image/jpeg"
+            all_extensions = mimetypes.guess_all_extensions(mimetype, strict=False)
+            if all_extensions:
+                for ext in all_extensions:
+                    if ext.lower() not in existing_extensions:
+                        missing_extensions.add(ext.lower())
+
+    return missing_extensions
 
 
 _QB_FILESELECTION_MODES = {
@@ -265,6 +317,12 @@ class WebEnginePage(QWebEnginePage):
         accepted_mimetypes: Iterable[str],
     ) -> List[str]:
         """Override chooseFiles to (optionally) invoke custom file uploader."""
+        # Apply workaround for missing file extensions in certain Qt versions
+        extra_extensions = extra_suffixes_workaround(accepted_mimetypes)
+        if extra_extensions:
+            # Merge extra extensions with original accepted types
+            accepted_mimetypes = list(accepted_mimetypes) + list(extra_extensions)
+
         handler = config.val.fileselect.handler
         if handler == "default":
             return super().chooseFiles(mode, old_files, accepted_mimetypes)
