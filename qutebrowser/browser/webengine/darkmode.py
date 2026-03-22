@@ -110,6 +110,7 @@ class Variant(enum.Enum):
     qt_515_2 = enum.auto()
     qt_515_3 = enum.auto()
     qt_63 = enum.auto()
+    qt_64 = enum.auto()
 
 
 # Mapping from a colors.webpage.darkmode.algorithm setting value to
@@ -280,6 +281,28 @@ _DEFINITIONS[Variant.qt_63] = _DEFINITIONS[Variant.qt_515_3].copy_add_setting(
     _Setting('increase_text_contrast', 'IncreaseTextContrast', _INT_BOOLS),
 )
 
+# Qt 6.4+ changes TextBrightnessThreshold to ForegroundBrightnessThreshold
+# Also switches to using 'foreground' config option instead of 'text'
+_qt_64_base_definition = _Definition(
+    # Different switch for settings
+    _Setting('enabled', 'forceDarkModeEnabled', _BOOLS),
+    _Setting('algorithm', 'InversionAlgorithm', _ALGORITHMS_NEW),
+
+    _Setting('policy.images', 'ImagePolicy', _IMAGE_POLICIES),
+    _Setting('contrast', 'ContrastPercent'),
+    _Setting('grayscale.all', 'IsGrayScale', _BOOLS),
+
+    _Setting('threshold.foreground', 'ForegroundBrightnessThreshold'),  # Changed from TextBrightnessThreshold
+    _Setting('threshold.background', 'BackgroundBrightnessThreshold'),
+    _Setting('grayscale.images', 'ImageGrayScalePercent'),
+    _Setting('increase_text_contrast', 'IncreaseTextContrast', _INT_BOOLS),
+
+    mandatory={'enabled', 'policy.images'},
+    prefix='',
+    switch_names={'enabled': _BLINK_SETTINGS, None: 'dark-mode-settings'},
+)
+_DEFINITIONS[Variant.qt_64] = _qt_64_base_definition
+
 
 _SettingValType = Union[str, usertypes.Unset]
 _PREFERRED_COLOR_SCHEME_DEFINITIONS: Mapping[Variant, Mapping[_SettingValType, str]] = {
@@ -302,6 +325,11 @@ _PREFERRED_COLOR_SCHEME_DEFINITIONS: Mapping[Variant, Mapping[_SettingValType, s
     Variant.qt_63: {
         "dark": "0",
         "light": "1",
+    },
+
+    Variant.qt_64: {
+        "dark": "0",
+        "light": "1",
     }
 }
 
@@ -315,7 +343,9 @@ def _variant(versions: version.WebEngineVersions) -> Variant:
         except KeyError:
             log.init.warning(f"Ignoring invalid QUTE_DARKMODE_VARIANT={env_var}")
 
-    if versions.webengine >= utils.VersionNumber(6, 3):
+    if versions.webengine >= utils.VersionNumber(6, 4):
+        return Variant.qt_64
+    elif versions.webengine >= utils.VersionNumber(6, 3):
         return Variant.qt_63
     elif (versions.webengine == utils.VersionNumber(5, 15, 2) and
             versions.chromium_major == 87):
@@ -372,9 +402,23 @@ def settings(
         # settings to Chromium, as our defaults line up with Chromium's.
         # However, we always pass enabled/algorithm to make sure dark mode gets
         # actually turned on.
-        value = config.instance.get(
-            'colors.webpage.darkmode.' + setting.option,
-            fallback=setting.option in definition.mandatory)
+        # Handle backward compatibility for threshold.foreground
+        if setting.option == 'threshold.foreground':
+            # Try the new foreground option first
+            value = config.instance.get(
+                'colors.webpage.darkmode.threshold.foreground',
+                fallback=setting.option in definition.mandatory)
+
+            # If not set, fall back to the legacy text option for compatibility
+            if isinstance(value, usertypes.Unset):
+                value = config.instance.get(
+                    'colors.webpage.darkmode.threshold.text',
+                    fallback=setting.option in definition.mandatory)
+        else:
+            value = config.instance.get(
+                'colors.webpage.darkmode.' + setting.option,
+                fallback=setting.option in definition.mandatory)
+
         if isinstance(value, usertypes.Unset):
             continue
 

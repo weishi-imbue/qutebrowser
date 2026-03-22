@@ -3363,7 +3363,25 @@ colors.webpage.darkmode.threshold.background:
       256 to never invert the color or to 0 to always invert it.
 
       Note: This behavior is the opposite of
-      `colors.webpage.darkmode.threshold.text`!
+      `colors.webpage.darkmode.threshold.foreground`!
+  restart: true
+  backend: QtWebEngine
+
+colors.webpage.darkmode.threshold.foreground:
+  default: 256
+  type:
+    name: Int
+    minval: 0
+    maxval: 256
+  desc: >-
+      Threshold for inverting foreground elements (text) with dark mode.
+
+      Foreground elements with brightness below this threshold will be inverted,
+      and above it will be left as in the original, non-dark-mode page. Set to 256
+      to always invert foreground color or to 0 to never invert foreground color.
+
+      This setting replaces the older `colors.webpage.darkmode.threshold.text`
+      setting for better compatibility with QtWebEngine 6.4 and higher.
   restart: true
   backend: QtWebEngine
 
