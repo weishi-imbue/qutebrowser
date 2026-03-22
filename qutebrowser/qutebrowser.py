@@ -244,8 +244,8 @@ def main():
     args = parser.parse_args(argv)
     if args.json_args is not None:
         args = _unpack_json_args(args)
-    machinery.init(args)
-    earlyinit.early_init(args)
+    info = machinery.init(args)
+    earlyinit.early_init(args, info)
     # We do this imports late as earlyinit needs to be run first (because of
     # version checking and other early initialization)
     from qutebrowser import app
