@@ -40,6 +40,18 @@ class Unavailable(Error, ImportError):
         super().__init__(f"Unavailable with {INFO.wrapper}")
 
 
+class NoWrapperAvailableError(Error, ImportError):
+    """Raised when no Qt wrapper is importable.
+
+    Carries a reference to the associated SelectionInfo.
+    """
+
+    def __init__(self, info: "SelectionInfo") -> None:
+        self.info = info
+        message = f"No Qt wrapper was importable.\n\n{info}"
+        super().__init__(message)
+
+
 class UnknownWrapper(Error):
     """Raised when an Qt module is imported but the wrapper values are unknown.
 
@@ -84,7 +96,12 @@ class SelectionInfo:
         setattr(self, name.lower(), outcome)
 
     def __str__(self) -> str:
-        lines = ["Qt wrapper:"]
+        # Short form: when PyQt5 or PyQt6 is missing (i.e., one of them is None)
+        if self.pyqt5 is None or self.pyqt6 is None:
+            return f"Qt wrapper: {self.wrapper} (via {self.reason.value})"
+
+        # Verbose form: detailed lines prefixed with "Qt wrapper info:"
+        lines = ["Qt wrapper info:"]
         if self.pyqt5 is not None:
             lines.append(f"PyQt5: {self.pyqt5}")
         if self.pyqt6 is not None:
@@ -106,16 +123,17 @@ def _autoselect_wrapper() -> SelectionInfo:
         try:
             importlib.import_module(wrapper)
         except ImportError as e:
-            info.set_module(wrapper, str(e))
+            # Include the exception type name to make the failure mode clear
+            error_msg = f"{e.__class__.__name__}: {str(e)}"
+            info.set_module(wrapper, error_msg)
             continue
 
         info.set_module(wrapper, "success")
         info.wrapper = wrapper
         return info
 
-    # FIXME return a SelectionInfo here instead so we can handle this in earlyinit?
-    wrappers = ", ".join(WRAPPERS)
-    raise Error(f"No Qt wrapper found, tried {wrappers}")
+    # Raise the dedicated error when no wrapper is importable
+    raise NoWrapperAvailableError(info)
 
 
 def _select_wrapper(args: Optional[argparse.Namespace]) -> SelectionInfo:
@@ -176,7 +194,7 @@ IS_PYSIDE: bool
 _initialized = False
 
 
-def init(args: Optional[argparse.Namespace] = None) -> None:
+def init(args: Optional[argparse.Namespace] = None) -> SelectionInfo:
     """Initialize Qt wrapper globals.
 
     There is two ways how this function can be called:
@@ -199,7 +217,7 @@ def init(args: Optional[argparse.Namespace] = None) -> None:
         # Implicit initialization can happen multiple times
         # (all subsequent calls are a no-op)
         if _initialized:
-            return
+            return INFO
     else:
         # Explicit initialization can happen exactly once, and if it's used, there
         # should not be any implicit initialization (qutebrowser.qt imports) before it.
@@ -212,7 +230,15 @@ def init(args: Optional[argparse.Namespace] = None) -> None:
         if name in sys.modules:
             raise Error(f"{name} already imported")
 
-    INFO = _select_wrapper(args)
+    try:
+        INFO = _select_wrapper(args)
+    except NoWrapperAvailableError:
+        # During implicit initialization, if no wrapper is importable, raise the dedicated error
+        if args is None:
+            raise
+        # For explicit initialization, let the error propagate
+        raise
+
     USE_PYQT5 = INFO.wrapper == "PyQt5"
     USE_PYQT6 = INFO.wrapper == "PyQt6"
     USE_PYSIDE6 = INFO.wrapper == "PySide6"
@@ -224,3 +250,15 @@ def init(args: Optional[argparse.Namespace] = None) -> None:
     IS_PYSIDE = USE_PYSIDE6
     assert IS_QT5 ^ IS_QT6
     assert IS_PYQT ^ IS_PYSIDE
+
+    # Add debug logging to print the machinery's current SelectionInfo
+    # We import here to avoid circular imports during early init
+    try:
+        from qutebrowser.utils import log
+        log.init.debug(f"Qt wrapper initialized: {INFO}")
+    except (ImportError, AttributeError):
+        # During very early initialization, logging might not be available yet
+        # or there might be circular import issues
+        pass
+
+    return INFO

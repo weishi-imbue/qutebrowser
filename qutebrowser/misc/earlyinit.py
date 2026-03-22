@@ -136,6 +136,25 @@ def init_faulthandler(fileobj=sys.__stderr__):
         # pylint: enable=no-member,useless-suppression
 
 
+def check_qt_available(info) -> None:
+    """Check that a Qt wrapper is importable based on the provided SelectionInfo.
+
+    Args:
+        info: SelectionInfo object from machinery initialization.
+
+    Raises:
+        NoWrapperAvailableError: If no Qt wrapper is importable.
+    """
+    from qutebrowser.qt.machinery import NoWrapperAvailableError
+
+    # If a wrapper was successfully selected, then Qt is available
+    if info.wrapper is not None:
+        return
+
+    # If no wrapper was selected, raise the dedicated error
+    raise NoWrapperAvailableError(info)
+
+
 def check_pyqt():
     """Check if PyQt core modules (QtCore/QtWidgets) are installed."""
     from qutebrowser.qt import machinery
@@ -151,6 +170,8 @@ def check_pyqt():
             text = text.replace('</b>', '')
             text = text.replace('<br />', '\n')
             text = text.replace('%ERROR%', str(e))
+            # Add two blank lines at the bottom for readability
+            text += '\n\n'
             if tkinter and '--no-err-windows' not in sys.argv:
                 root = tkinter.Tk()
                 root.withdraw()
@@ -318,7 +339,7 @@ def webengine_early_import():
         pass
 
 
-def early_init(args):
+def early_init(args, info):
     """Do all needed early initialization.
 
     Note that it's vital the other earlyinit functions get called in the right
@@ -326,10 +347,13 @@ def early_init(args):
 
     Args:
         args: The argparse namespace.
+        info: SelectionInfo from machinery initialization.
     """
     # First we initialize the faulthandler as early as possible, so we
     # theoretically could catch segfaults occurring later during earlyinit.
     init_faulthandler()
+    # Check if any Qt wrapper is importable using the machinery's current info
+    check_qt_available(info)
     # Here we check if QtCore is available, and if not, print a message to the
     # console or via Tk.
     check_pyqt()
