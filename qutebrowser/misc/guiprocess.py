@@ -23,6 +23,7 @@ import dataclasses
 import locale
 import shlex
 import shutil
+import signal
 from typing import Mapping, Sequence, Dict, Optional
 
 from qutebrowser.qt.core import (pyqtSlot, pyqtSignal, QObject, QProcess,
@@ -96,6 +97,31 @@ class ProcessOutcome:
         assert self.code is not None
         return self.status == QProcess.ExitStatus.NormalExit and self.code == 0
 
+    def was_sigterm(self) -> bool:
+        """Whether the process terminated due to a SIGTERM signal.
+
+        Returns True if the finished process exited due to a SIGTERM signal
+        (status == QProcess.CrashExit and exit code equals signal.SIGTERM);
+        otherwise returns False.
+        """
+        if self.status is None or self.code is None:
+            return False
+        return self.status == QProcess.ExitStatus.CrashExit and self.code == signal.SIGTERM
+
+    def _crash_signal(self) -> Optional[signal.Signals]:
+        """Return the Python signal that caused a crashed process to terminate.
+
+        Returns None for unrecognized signals or if the process didn't crash.
+        """
+        if self.status != QProcess.ExitStatus.CrashExit or self.code is None:
+            return None
+
+        try:
+            return signal.Signals(self.code)
+        except ValueError:
+            # Unrecognized signal number
+            return None
+
     def __str__(self) -> str:
         if self.running:
             return f"{self.what.capitalize()} is running."
@@ -106,7 +132,15 @@ class ProcessOutcome:
         assert self.code is not None
 
         if self.status == QProcess.ExitStatus.CrashExit:
-            return f"{self.what.capitalize()} crashed."
+            crash_signal = self._crash_signal()
+            if crash_signal is not None:
+                signal_name = crash_signal.name
+                if self.was_sigterm():
+                    return f"{self.what.capitalize()} terminated with status {self.code} ({signal_name})."
+                else:
+                    return f"{self.what.capitalize()} crashed with status {self.code} ({signal_name})."
+            else:
+                return f"{self.what.capitalize()} crashed."
         elif self.was_successful():
             return f"{self.what.capitalize()} exited successfully."
 
@@ -125,9 +159,12 @@ class ProcessOutcome:
         elif self.status is None:
             return 'not started'
         elif self.status == QProcess.ExitStatus.CrashExit:
-            return 'crashed'
+            if self.was_sigterm():
+                return 'terminated'
+            else:
+                return 'crashed'
         elif self.was_successful():
-            return 'successful'
+            return 'exited successfully'
         else:
             return 'unsuccessful'
 
@@ -323,7 +360,13 @@ class GUIProcess(QObject):
             if self.verbose:
                 message.info(str(self.outcome))
             self._cleanup_timer.start()
+        elif self.outcome.was_sigterm():
+            # SIGTERM termination - treat as informational, not an error
+            if self.verbose:
+                message.info(f"{self.outcome} See :process {self.pid} for details.")
+            self._cleanup_timer.start()
         else:
+            # Actual crash or error - log output and show error message
             if self.stdout:
                 log.procs.error("Process stdout:\n" + self.stdout.strip())
             if self.stderr:
