@@ -941,15 +941,20 @@ content.javascript.log:
     `error`.
 
 content.javascript.log_message:
+  renamed: content.javascript.log_message.levels
+
+content.javascript.log_message.levels:
   type:
     name: Dict
     keytype: String
     valtype:
       name: FlagList
       valid_values:
+        - debug: Show JS debug messages as messages.
         - info: Show JS info as messages.
         - warning: Show JS warnings as messages.
         - error: Show JS errors as messages.
+    none_ok: true
   default:
     "qute:*": ["error"]
     "userscript:*": ["error"]
@@ -958,10 +963,30 @@ content.javascript.log_message:
 
     When a JavaScript message is logged from a location matching the glob
     pattern given in the key, and is from one of the levels listed as value,
-    it's surfaced as a message in the qutebrowser UI.
+    it's surfaced as a message in the qutebrowser UI (unless excluded by
+    log_message.excludes).
 
     By default, errors happening in qutebrowser internally or in userscripts are
     shown to the user.
+
+content.javascript.log_message.excludes:
+  type:
+    name: Dict
+    keytype: String
+    valtype:
+      name: List
+      valtype: String
+    none_ok: true
+  default: {}
+  desc: >-
+    Javascript message patterns to exclude from qutebrowser UI.
+
+    For sources matching the glob pattern in the key, messages matching any
+    of the glob patterns in the value list will be suppressed from the UI
+    even if enabled by log_message.levels.
+
+    This is useful for filtering out repetitive error messages like Content
+    Security Policy violations from userscripts.
 
 content.javascript.modal_dialog:
   type: Bool
