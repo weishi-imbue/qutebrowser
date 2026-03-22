@@ -159,6 +159,45 @@ _JS_LOGMAP_MESSAGE: Mapping[usertypes.JsLogLevel, Callable[[str], None]] = {
 }
 
 
+def _js_log_to_ui(
+    level: usertypes.JsLogLevel,
+    source: str,
+    line: int,
+    msg: str,
+) -> bool:
+    """Check if a JavaScript log message should be shown in the UI.
+
+    Args:
+        level: The JavaScript log level.
+        source: The source of the message.
+        line: The line number.
+        msg: The message content.
+
+    Returns:
+        True if the message should be shown in the UI, False otherwise.
+    """
+    # Check if the source/level combination is enabled in log_message.levels
+    levels_config = config.cache.get('content.javascript.log_message.levels', {})
+    source_matched = False
+    for pattern, levels in levels_config.items():
+        if fnmatch.fnmatchcase(source, pattern) and level.name in levels:
+            source_matched = True
+            break
+
+    if not source_matched:
+        return False
+
+    # Check if the message is excluded by log_message.excludes
+    excludes_config = config.cache.get('content.javascript.log_message.excludes', {})
+    for pattern, exclude_patterns in excludes_config.items():
+        if fnmatch.fnmatchcase(source, pattern):
+            for exclude_pattern in exclude_patterns:
+                if fnmatch.fnmatchcase(msg, exclude_pattern):
+                    return False
+
+    return True
+
+
 def javascript_log_message(
     level: usertypes.JsLogLevel,
     source: str,
@@ -168,14 +207,12 @@ def javascript_log_message(
     """Display a JavaScript log message."""
     logstring = f"[{source}:{line}] {msg}"
 
-    for pattern, levels in config.cache['content.javascript.log_message'].items():
-        if level.name in levels and fnmatch.fnmatchcase(source, pattern):
-            func = _JS_LOGMAP_MESSAGE[level]
-            func(f"JS: {logstring}")
-            return
-
-    logger = _JS_LOGMAP[config.cache['content.javascript.log'][level.name]]
-    logger(logstring)
+    if _js_log_to_ui(level, source, line, msg):
+        func = _JS_LOGMAP_MESSAGE[level]
+        func(f"JS: {logstring}")
+    else:
+        logger = _JS_LOGMAP[config.cache['content.javascript.log'][level.name]]
+        logger(logstring)
 
 
 def ignore_certificate_error(
