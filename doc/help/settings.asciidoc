@@ -3481,6 +3481,7 @@ Valid values:
  * +always+: Always show the scrollbar.
  * +never+: Never show the scrollbar.
  * +when-searching+: Show the scrollbar when searching for text in the webpage. With the QtWebKit backend, this is equal to `never`.
+ * +overlay+: Use overlay scrollbars. Only supported with the QtWebEngine backend on Qt >= 5.11 and non-macOS systems.
 
 Default: +pass:[when-searching]+
 

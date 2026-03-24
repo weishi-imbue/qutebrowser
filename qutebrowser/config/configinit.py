@@ -308,6 +308,11 @@ def _qtwebengine_args(namespace: argparse.Namespace) -> typing.Iterator[str]:
         yield '--enable-logging'
         yield '--v=1'
 
+    if (config.val.scrolling.bar == 'overlay' and
+            qtutils.version_check('5.11', compiled=False) and
+            sys.platform != 'darwin'):
+        yield '--enable-features=OverlayScrollbar'
+
     blink_settings = list(_darkmode_settings())
     if blink_settings:
         yield '--blink-settings=' + ','.join('{}={}'.format(k, v)
