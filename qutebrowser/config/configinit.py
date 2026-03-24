@@ -21,6 +21,7 @@
 
 import argparse
 import os.path
+import platform
 import sys
 import typing
 
@@ -370,3 +371,9 @@ def _qtwebengine_args(namespace: argparse.Namespace) -> typing.Iterator[str]:
         arg = args[config.instance.get(setting)]
         if arg is not None:
             yield arg
+
+    # Handle overlay scrollbars
+    if (config.instance.get('scrolling.bar') == 'overlay' and
+            qtutils.version_check('5.11', compiled=False) and
+            platform.system() != 'Darwin'):
+        yield '--enable-features=OverlayScrollbar'
