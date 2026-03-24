@@ -289,9 +289,14 @@ def parse_duration(duration: str) -> int:
 
     duration = duration.strip()
 
-    # Handle backwards compatibility: pure numeric strings are milliseconds
-    if duration.isdigit():
+    # Handle backwards compatibility: numeric strings (including negative) are milliseconds
+    try:
         ms = int(duration)
+    except ValueError:
+        # Not a pure integer, continue with unit parsing
+        pass
+    else:
+        # Successfully converted to int
         if ms < 0:
             raise ValueError("Duration cannot be negative")
         return ms

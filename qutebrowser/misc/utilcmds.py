@@ -54,7 +54,6 @@ def later(duration: str, command: str, win_id: int) -> None:
         ms = utils.parse_duration(duration)
     except ValueError as e:
         raise cmdutils.CommandError(f"Invalid duration format: {e}")
-
     commandrunner = runners.CommandRunner(win_id)
     timer = usertypes.Timer(name='later', parent=QApplication.instance())
     try:
