@@ -90,11 +90,17 @@ class SupportsLessThan(Protocol):
 if TYPE_CHECKING:
     class VersionNumber(SupportsLessThan, QVersionNumber):
 
-        """WORKAROUND for incorrect PyQt stubs."""
-else:
-    class VersionNumber:
+        """WORKAROUND for incorrect PyQt stubs.
 
-        """We can't inherit from Protocol and QVersionNumber at runtime."""
+        We subclass QVersionNumber at runtime to get proper version comparisons,
+        but also need SupportsLessThan for type checking. PyQt stubs don't
+        properly expose comparison operators on QVersionNumber, so we need this
+        workaround.
+        """
+else:
+    class VersionNumber(QVersionNumber):
+
+        """Subclass of QVersionNumber for proper version comparisons."""
 
 
 class Unreachable(Exception):
