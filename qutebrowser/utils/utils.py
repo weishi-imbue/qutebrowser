@@ -261,6 +261,87 @@ def format_seconds(total_seconds: int) -> str:
     return prefix + ':'.join(chunks)
 
 
+def parse_duration(duration: str) -> int:
+    """Parse a duration string and return the total duration in milliseconds.
+
+    Accepts duration strings in the format 'XhYmZs' where X, Y, Z are
+    decimal numbers and h/m/s are unit specifiers for hours, minutes,
+    and seconds respectively. Any component is optional.
+
+    Examples:
+        '5s' -> 5000 (5 seconds = 5000 milliseconds)
+        '2m30s' -> 150000 (2.5 minutes = 150000 milliseconds)
+        '1h' -> 3600000 (1 hour = 3600000 milliseconds)
+        '1.5h' -> 5400000 (1.5 hours = 5400000 milliseconds)
+        '90' -> 90 (backwards compatibility: pure numbers as milliseconds)
+
+    Args:
+        duration: A duration string to parse.
+
+    Returns:
+        Total duration in milliseconds as an integer.
+
+    Raises:
+        ValueError: If the input is invalid, negative, empty, or lacks valid components.
+    """
+    if not duration or not duration.strip():
+        raise ValueError("Duration cannot be empty or whitespace")
+
+    duration = duration.strip()
+
+    # Handle backwards compatibility: pure numeric strings are milliseconds
+    if duration.isdigit():
+        ms = int(duration)
+        if ms < 0:
+            raise ValueError("Duration cannot be negative")
+        return ms
+
+    # Parse duration string with units
+    total_ms = 0
+    found_units = False
+
+    # Pattern to match components like "1.5h", "30m", "45.5s"
+    pattern = r'([0-9]*\.?[0-9]+)\s*([hms])'
+    matches = re.findall(pattern, duration)
+
+    if not matches:
+        raise ValueError("Invalid duration format: no valid time components found")
+
+    for value_str, unit in matches:
+        try:
+            value = float(value_str)
+        except ValueError:
+            raise ValueError(f"Invalid numeric value: {value_str}")
+
+        if value < 0:
+            raise ValueError("Duration components cannot be negative")
+
+        if unit == 'h':
+            total_ms += value * 3600 * 1000  # hours to milliseconds
+        elif unit == 'm':
+            total_ms += value * 60 * 1000    # minutes to milliseconds
+        elif unit == 's':
+            total_ms += value * 1000         # seconds to milliseconds
+
+        found_units = True
+
+    # Check that we consumed the entire string (no leftover characters)
+    reconstructed = ''.join(f'{v}{u}' for v, u in matches)
+    cleaned_input = re.sub(r'\s+', '', duration)  # Remove whitespace for comparison
+    cleaned_reconstructed = re.sub(r'\s+', '', reconstructed)
+
+    if cleaned_input != cleaned_reconstructed:
+        raise ValueError("Invalid duration format: contains invalid characters")
+
+    if not found_units:
+        raise ValueError("No valid time units found")
+
+    if total_ms < 0:
+        raise ValueError("Duration cannot be negative")
+
+    return int(total_ms)
+
+
 def format_size(size: Optional[float], base: int = 1024, suffix: str = '') -> str:
     """Format a byte size so it's human readable.
 
