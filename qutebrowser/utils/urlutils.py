@@ -534,7 +534,7 @@ def _get_incdec_value(pre, zeroes, number, post, incdec, url, count):
     # This should always succeed because we match \d+
     val = int(number)
     if incdec == 'decrement':
-        if val <= 0:
+        if val < count:
             raise IncDecError("Can't decrement {}!".format(val), url)
         val -= count
     elif incdec == 'increment':
@@ -559,7 +559,7 @@ def incdec_number(url, incdec, count=1, segments=None):
         count: The number to increment or decrement by
         segments: A set of URL segments to search. Valid segments are:
                   'host', 'port', 'path', 'query', 'anchor'.
-                  Default: {'path', 'query'}
+                  Default: {'path'}
 
     Return:
         The new url with the number incremented/decremented.
