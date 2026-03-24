@@ -19,6 +19,7 @@
 
 """Configuration files residing on disk."""
 
+import enum
 import pathlib
 import types
 import os.path
@@ -51,6 +52,33 @@ state = cast('StateConfig', None)
 _SettingsType = Dict[str, Dict[str, Any]]
 
 
+class VersionChange(enum.Enum):
+
+    """Represents the type of version change between two qutebrowser versions."""
+
+    unknown = enum.auto()
+    equal = enum.auto()
+    downgrade = enum.auto()
+    patch = enum.auto()
+    minor = enum.auto()
+    major = enum.auto()
+
+    def matches_filter(self, filterstr: str) -> bool:
+        """Return whether this version change matches the given filter.
+
+        Args:
+            filterstr: The changelog_after_upgrade config value.
+        """
+        # Order of severity: patch < minor < major
+        filter_order = ['patch', 'minor', 'major']
+        if filterstr not in filter_order:
+            return False
+        if self.name not in filter_order:
+            # unknown/equal/downgrade never match
+            return False
+        return filter_order.index(self.name) >= filter_order.index(filterstr)
+
+
 class StateConfig(configparser.ConfigParser):
 
     """The "state" file saving various application state."""
@@ -59,20 +87,8 @@ class StateConfig(configparser.ConfigParser):
         super().__init__()
         self._filename = os.path.join(standarddir.data(), 'state')
         self.read(self._filename, encoding='utf-8')
-        qt_version = qVersion()
 
-        # We handle this here, so we can avoid setting qt_version_changed if
-        # the config is brand new, but can still set it when qt_version wasn't
-        # there before...
-        if 'general' in self:
-            old_qt_version = self['general'].get('qt_version', None)
-            old_qutebrowser_version = self['general'].get('version', None)
-            self.qt_version_changed = old_qt_version != qt_version
-            self.qutebrowser_version_changed = (
-                old_qutebrowser_version != qutebrowser.__version__)
-        else:
-            self.qt_version_changed = False
-            self.qutebrowser_version_changed = False
+        self._set_changed_attributes()
 
         for sect in ['general', 'geometry', 'inspector']:
             try:
@@ -89,8 +105,62 @@ class StateConfig(configparser.ConfigParser):
         for sect, key in deleted_keys:
             self[sect].pop(key, None)
 
-        self['general']['qt_version'] = qt_version
+        self['general']['qt_version'] = qVersion()
         self['general']['version'] = qutebrowser.__version__
+
+    def _set_changed_attributes(self) -> None:
+        """Set qt_version_changed/qutebrowser_version_changed attributes."""
+        qt_version = qVersion()
+
+        # We handle this here, so we can avoid setting qt_version_changed if
+        # the config is brand new, but can still set it when qt_version wasn't
+        # there before...
+        if 'general' in self:
+            old_qt_version = self['general'].get('qt_version', None)
+            self.qt_version_changed = old_qt_version != qt_version
+
+            old_qutebrowser_version = self['general'].get('version', None)
+            self.qutebrowser_version_changed = self._compare_versions(
+                old_qutebrowser_version, qutebrowser.__version__)
+        else:
+            self.qt_version_changed = False
+            self.qutebrowser_version_changed = VersionChange.equal
+
+    @staticmethod
+    def _compare_versions(old_version: Optional[str],
+                          new_version: str) -> 'VersionChange':
+        """Compare two version strings and return a VersionChange."""
+        if old_version is None:
+            return VersionChange.unknown
+
+        try:
+            old_parts = [int(x) for x in old_version.split('.')]
+            new_parts = [int(x) for x in new_version.split('.')]
+        except ValueError:
+            log.init.warning(
+                f"Unable to parse version: old {old_version!r}, "
+                f"new {new_version!r}")
+            return VersionChange.unknown
+
+        if len(old_parts) < 3 or len(new_parts) < 3:
+            log.init.warning(
+                f"Unable to parse version: old {old_version!r}, "
+                f"new {new_version!r}")
+            return VersionChange.unknown
+
+        if old_parts == new_parts:
+            return VersionChange.equal
+
+        if new_parts < old_parts:
+            return VersionChange.downgrade
+
+        if old_parts[0] != new_parts[0]:
+            return VersionChange.major
+
+        if old_parts[1] != new_parts[1]:
+            return VersionChange.minor
+
+        return VersionChange.patch
 
     def init_save_manager(self,
                           save_manager: 'savemanager.SaveManager') -> None:
@@ -325,6 +395,7 @@ class YamlMigrations(QObject):
         self._migrate_font_default_family()
         self._migrate_font_replacements()
 
+        self._migrate_bool('changelog_after_upgrade', 'minor', 'never')
         self._migrate_bool('tabs.favicons.show', 'always', 'never')
         self._migrate_bool('scrolling.bar', 'always', 'overlay')
         self._migrate_bool('qt.force_software_rendering',
