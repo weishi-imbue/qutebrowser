@@ -42,13 +42,17 @@ from qutebrowser.qt import sip
 
 @cmdutils.register(maxsplit=1, no_cmd_split=True, no_replace_variables=True)
 @cmdutils.argument('win_id', value=cmdutils.Value.win_id)
-def later(ms: int, command: str, win_id: int) -> None:
+def later(duration: str, command: str, win_id: int) -> None:
     """Execute a command after some time.
 
     Args:
-        ms: How many milliseconds to wait.
+        duration: Time to wait, as milliseconds or a duration string (e.g. 5s, 2m30s, 1h).
         command: The command to run, with optional args.
     """
+    try:
+        ms = utils.parse_duration(duration)
+    except ValueError as e:
+        raise cmdutils.CommandError(str(e))
     if ms < 0:
         raise cmdutils.CommandError("I can't run something in the past!")
     commandrunner = runners.CommandRunner(win_id)
