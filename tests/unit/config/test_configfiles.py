@@ -626,6 +626,106 @@ class TestYamlMigrations:
         assert invalid_pattern not in data[setting]
         assert data[setting][valid_pattern]
 
+    def test_bool_non_dict(self, yaml, autoconfig):
+        """_migrate_bool should skip settings with non-dict values."""
+        autoconfig.write({'tabs.favicons.show': 42})
+
+        # Migration doesn't crash; _build_values reports the invalid value
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            yaml.load()
+
+        assert any("value is not a dict" in str(e.exception)
+                    for e in excinfo.value.errors)
+
+    def test_renamed_bool_non_dict(self, yaml, autoconfig):
+        """_migrate_renamed_bool should handle non-dict values gracefully."""
+        autoconfig.write({'tabs.persist_mode_on_change': 42})
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        assert 'tabs.persist_mode_on_change' not in data
+
+    def test_font_default_family_non_dict(self, yaml, autoconfig):
+        """_migrate_font_default_family should handle non-dict values."""
+        autoconfig.write({'fonts.monospace': 42})
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        assert 'fonts.monospace' not in data
+
+    def test_font_replacements_non_dict(self, yaml, autoconfig):
+        """_migrate_font_replacements should skip non-dict values."""
+        autoconfig.write({'fonts.hints': 42})
+
+        # Migration doesn't crash; _build_values reports the invalid value
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            yaml.load()
+
+        assert any("value is not a dict" in str(e.exception)
+                    for e in excinfo.value.errors)
+
+    def test_migrate_none_non_dict(self, yaml, autoconfig):
+        """_migrate_none should skip non-dict values (not None)."""
+        autoconfig.write({'content.headers.user_agent': 42})
+
+        # Migration doesn't crash; _build_values reports the invalid value
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            yaml.load()
+
+        assert any("value is not a dict" in str(e.exception)
+                    for e in excinfo.value.errors)
+
+    def test_migrate_none_none_value(self, yaml, autoconfig):
+        """_migrate_none should replace None with default."""
+        autoconfig.write({'content.headers.user_agent': None})
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        assert data['content.headers.user_agent']['global'] is not None
+
+    def test_migrate_to_multiple_non_dict(self, yaml, autoconfig):
+        """_migrate_to_multiple should handle non-dict values."""
+        autoconfig.write({'fonts.tabs': 42})
+
+        yaml.load()
+        yaml._save()
+
+        data = autoconfig.read()
+        assert 'fonts.tabs' not in data
+
+    def test_string_value_non_dict(self, yaml, autoconfig):
+        """_migrate_string_value should skip non-dict values."""
+        autoconfig.write({'tabs.title.format': 42})
+
+        # Migration doesn't crash; _build_values reports the invalid value
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            yaml.load()
+
+        assert any("value is not a dict" in str(e.exception)
+                    for e in excinfo.value.errors)
+
+    def test_empty_pattern_non_dict(self, yaml, autoconfig):
+        """_remove_empty_patterns should skip non-dict values."""
+        autoconfig.write({
+            'content.javascript.enabled': {
+                'global': False,
+            },
+            'tabs.favicons.show': 42,
+        })
+
+        # Migration doesn't crash on non-dict; _build_values reports it
+        with pytest.raises(configexc.ConfigFileErrors) as excinfo:
+            yaml.load()
+
+        assert any("value is not a dict" in str(e.exception)
+                    for e in excinfo.value.errors)
+
 
 class ConfPy:
 
