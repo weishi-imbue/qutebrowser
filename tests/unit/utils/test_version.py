@@ -619,6 +619,8 @@ def import_fake(monkeypatch):
     monkeypatch.setattr('builtins.__import__', fake.fake_import)
     monkeypatch.setattr(version.importlib, 'import_module',
                         fake.fake_importlib_import)
+    for info in version.MODULE_INFO.values():
+        info._reset_cache()
     return fake
 
 
