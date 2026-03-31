@@ -1250,11 +1250,14 @@ class TestQtColor:
 
         ('rgba(255, 255, 255, 1.0)', QColor.fromRgb(255, 255, 255, 255)),
 
-        # this should be (36, 25, 25) as hue goes to 359
-        # however this is consistent with Qt's CSS parser
-        # https://bugreports.qt.io/browse/QTBUG-70897
-        ('hsv(10%,10%,10%)', QColor.fromHsv(25, 25, 25)),
-        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(25, 51, 76, 102)),
+        ('hsv(10%,10%,10%)', QColor.fromHsv(36, 26, 26)),
+        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(36, 51, 76, 102)),
+        ('hsv(100%,100%,100%)', QColor.fromHsv(359, 255, 255)),
+        ('hsva(100%,100%,100%,100%)', QColor.fromHsv(359, 255, 255, 255)),
+        ('hsv(0%,0%,0%)', QColor.fromHsv(0, 0, 0)),
+        ('hsv(50%,50%,50%)', QColor.fromHsv(180, 128, 128)),
+        ('hsv(359, 255, 255)', QColor.fromHsv(359, 255, 255)),
+        ('hsva(359, 255, 255, 255)', QColor.fromHsv(359, 255, 255, 255)),
     ])
     def test_valid(self, klass, val, expected):
         assert klass().to_py(val) == expected
@@ -1274,6 +1277,8 @@ class TestQtColor:
         'rgb(1, 2, 3, 4)',
         'rgba(1, 2, 3)',
         'rgb(10%%, 0, 0)',
+        'hsv(1, 2, 3, 4)',
+        'hsva(1, 2, 3)',
     ])
     def test_invalid(self, klass, val):
         with pytest.raises(configexc.ValidationError):
