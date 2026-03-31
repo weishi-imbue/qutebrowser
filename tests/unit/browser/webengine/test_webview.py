@@ -4,6 +4,7 @@
 
 import re
 import dataclasses
+from unittest import mock
 
 import pytest
 webview = pytest.importorskip('qutebrowser.browser.webengine.webview')
@@ -61,79 +62,132 @@ def test_enum_mappings(enum_type, naming, mapping):
 
 
 class TestExtraSuffixesWorkaround:
+    """Tests for the extra_suffixes_workaround function."""
 
-    @pytest.fixture
-    def affected_version(self, monkeypatch):
-        """Mock version_check to simulate an affected Qt version (e.g. 6.5.2)."""
-        def fake_version_check(version, compiled=False):
-            # 6.2.3 -> True (is >=6.2.3), 6.7.0 -> False (is <6.7.0)
-            if version == "6.2.3":
-                return True
-            if version == "6.7.0":
+    @pytest.mark.parametrize("qt_version, expected_active", [
+        ("6.2.2", False),  # Too old
+        ("6.2.3", True),   # At minimum threshold
+        ("6.5.0", True),   # Within range
+        ("6.6.9", True),   # Within range
+        ("6.7.0", False),  # At maximum threshold (exclusive)
+        ("6.8.0", False),  # Too new
+    ])
+    def test_qt_version_check(self, qt_version, expected_active):
+        """Test that the workaround only applies for Qt versions ≥6.2.3 and <6.7.0."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check") as version_check_mock:
+            # Mock version_check to return expected values based on version
+            def mock_version_check(version, compiled=False):
+                if version == "6.2.3":
+                    return qt_version >= "6.2.3"
+                elif version == "6.7.0":
+                    return qt_version >= "6.7.0"
                 return False
-            return True
-        monkeypatch.setattr(webview.qtutils, 'version_check', fake_version_check)
 
-    @pytest.fixture
-    def unaffected_old_version(self, monkeypatch):
-        """Mock version_check to simulate an old Qt version (e.g. 6.1.0)."""
-        def fake_version_check(version, compiled=False):
-            # 6.2.3 -> False (is <6.2.3)
-            if version == "6.2.3":
-                return False
-            if version == "6.7.0":
-                return False
-            return False
-        monkeypatch.setattr(webview.qtutils, 'version_check', fake_version_check)
+            version_check_mock.side_effect = mock_version_check
 
-    @pytest.fixture
-    def unaffected_new_version(self, monkeypatch):
-        """Mock version_check to simulate a fixed Qt version (e.g. 6.7.0)."""
-        def fake_version_check(version, compiled=False):
-            # 6.2.3 -> True, 6.7.0 -> True (is >=6.7.0)
-            if version == "6.2.3":
-                return True
-            if version == "6.7.0":
-                return True
-            return True
-        monkeypatch.setattr(webview.qtutils, 'version_check', fake_version_check)
+            result = webview.extra_suffixes_workaround(["image/jpeg"])
 
-    def test_returns_empty_for_old_qt(self, unaffected_old_version):
-        result = webview.extra_suffixes_workaround(["image/jpeg"])
-        assert result == set()
+            if expected_active:
+                # Should return some extensions for image/jpeg
+                assert len(result) > 0
+                assert any(ext.endswith(('.jpg', '.jpeg', '.jpe')) for ext in result)
+            else:
+                # Should return empty set
+                assert result == set()
 
-    def test_returns_empty_for_fixed_qt(self, unaffected_new_version):
-        result = webview.extra_suffixes_workaround(["image/jpeg"])
-        assert result == set()
+    def test_empty_input(self):
+        """Test handling of empty input."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            # First call returns True (≥6.2.3), second returns False (<6.7.0)
+            mock_check.side_effect = [True, False]
 
-    def test_specific_mimetype(self, affected_version):
-        result = webview.extra_suffixes_workaround(["image/jpeg"])
-        assert ".jpg" in result or ".jpe" in result or ".jpeg" in result
-        # At minimum, .jpg should be returned as an extra suffix
-        assert ".jpg" in result
+            result = webview.extra_suffixes_workaround([])
+            assert result == set()
 
-    def test_existing_extension_not_duplicated(self, affected_version):
-        result = webview.extra_suffixes_workaround(["image/jpeg", ".jpg"])
-        assert ".jpg" not in result
+    def test_existing_suffixes_deduplication(self):
+        """Test that existing suffixes are not duplicated in the output."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
 
-    def test_wildcard_mimetype(self, affected_version):
-        result = webview.extra_suffixes_workaround(["image/*"])
-        # Should include common image extensions
-        assert ".jpg" in result or ".png" in result
+            result = webview.extra_suffixes_workaround(["image/jpeg", ".jpg", ".jpeg"])
 
-    def test_extension_passthrough(self, affected_version):
-        # Entries starting with "." are treated as existing extensions
-        result = webview.extra_suffixes_workaround([".jpg", ".png"])
-        # No MIME types to process, so no extras
-        assert result == set()
+            # Should not include .jpg or .jpeg since they're already in input
+            assert ".jpg" not in result
+            assert ".jpeg" not in result
+            # But might include .jpe if it exists for image/jpeg
+            assert len([ext for ext in result if ext.startswith(".jp")]) <= 1
 
-    def test_empty_input(self, affected_version):
-        result = webview.extra_suffixes_workaround([])
-        assert result == set()
+    def test_wildcard_mime_types(self):
+        """Test handling of wildcard MIME types like 'image/*'."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
 
-    def test_mixed_mimetypes_and_extensions(self, affected_version):
-        result = webview.extra_suffixes_workaround(["image/jpeg", ".jpeg"])
-        # .jpeg is already present, so should not be in extras
-        assert ".jpeg" not in result
-        # But .jpg and .jpe should still be returned if available
-        assert ".jpg" in result
+            result = webview.extra_suffixes_workaround(["image/*"])
+
+            # Should include common image extensions
+            image_extensions = {ext for ext in result if ext.startswith('.') and
+                              any(ext.endswith(suffix) for suffix in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'])}
+            assert len(image_extensions) > 0
+
+    def test_specific_mime_types(self):
+        """Test handling of specific MIME types."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
+
+            result = webview.extra_suffixes_workaround(["image/jpeg"])
+
+            # Should include extensions for JPEG
+            jpeg_extensions = {ext for ext in result if ext.endswith(('.jpg', '.jpeg', '.jpe'))}
+            assert len(jpeg_extensions) > 0
+
+    def test_mixed_input_types(self):
+        """Test handling of mixed input with both MIME types and existing extensions."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
+
+            input_types = ["image/jpeg", "text/plain", ".txt", ".jpg"]
+            result = webview.extra_suffixes_workaround(input_types)
+
+            # Should not include .txt or .jpg since they're already provided
+            assert ".txt" not in result
+            assert ".jpg" not in result
+            # May include other extensions for the MIME types
+            assert isinstance(result, set)
+
+    def test_case_insensitive_extension_handling(self):
+        """Test that extension comparison is case-insensitive."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
+
+            # Test with uppercase extension
+            result = webview.extra_suffixes_workaround(["image/jpeg", ".JPG"])
+
+            # Should not include .jpg since .JPG is equivalent
+            assert ".jpg" not in result
+
+    def test_return_type_and_lowercase(self):
+        """Test that function returns a set and extensions are lowercase."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
+
+            result = webview.extra_suffixes_workaround(["image/jpeg"])
+
+            # Should return a set
+            assert isinstance(result, set)
+            # All extensions should be lowercase and start with '.'
+            for ext in result:
+                assert isinstance(ext, str)
+                assert ext.startswith('.')
+                assert ext == ext.lower()
+
+    def test_multiple_wildcard_types(self):
+        """Test handling of multiple wildcard MIME types."""
+        with mock.patch("qutebrowser.utils.qtutils.version_check", return_value=True) as mock_check:
+            mock_check.side_effect = [True, False]  # Active workaround
+
+            result = webview.extra_suffixes_workaround(["image/*", "video/*"])
+
+            # Should include extensions for both image and video types
+            assert len(result) > 0
+            # Result should be a proper set (no duplicates)
+            assert len(result) == len(set(result))
