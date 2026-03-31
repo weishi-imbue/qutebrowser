@@ -941,52 +941,27 @@ content.javascript.log:
     `error`.
 
 content.javascript.log_message:
-  renamed: content.javascript.log_message.levels
-
-content.javascript.log_message.excludes:
-  type:
-    name: Dict
-    keytype: String
-    valtype:
-      name: List
-      none_ok: true
-      valtype: String
-    none_ok: true
-  default: {}
-  desc: >-
-    Glob-based exclusions to suppress specific JavaScript messages from being
-    shown in the qutebrowser UI.
-
-    The keys are glob patterns matching the source of JavaScript messages.
-    The values are lists of glob patterns matching the message text.
-    If a message's source matches a key and its text matches any of the
-    corresponding message patterns, it will not be shown in the UI even if
-    it would otherwise be shown by content.javascript.log_message.levels.
-
-content.javascript.log_message.levels:
   type:
     name: Dict
     keytype: String
     valtype:
       name: FlagList
       valid_values:
-        - debug: Show JS debug as messages.
         - info: Show JS info as messages.
         - warning: Show JS warnings as messages.
         - error: Show JS errors as messages.
-    none_ok: true
   default:
     "qute:*": ["error"]
     "userscript:*": ["error"]
   desc: >-
-    Defines which JavaScript log message levels from matching sources are
-    shown in the qutebrowser UI.
+    Javascript message sources/levels to show in the qutebrowser UI.
 
-    The keys are glob patterns matching the source of JavaScript messages.
-    The values are lists of log levels to show for matching sources.
-    When a JavaScript message is logged from a source matching the glob pattern
-    and is from one of the listed levels, it's surfaced as a message in the
-    qutebrowser UI.
+    When a JavaScript message is logged from a location matching the glob
+    pattern given in the key, and is from one of the levels listed as value,
+    it's surfaced as a message in the qutebrowser UI.
+
+    By default, errors happening in qutebrowser internally or in userscripts are
+    shown to the user.
 
 content.javascript.modal_dialog:
   type: Bool
