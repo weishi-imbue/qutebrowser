@@ -626,6 +626,161 @@ class TestYamlMigrations:
         assert invalid_pattern not in data[setting]
         assert data[setting][valid_pattern]
 
+    def test_defensive_type_checks_direct(self):
+        """Test defensive type checks by calling migration methods directly."""
+        # Test _migrate_font_default_family with non-dict value
+        settings = {'fonts.monospace': 42}  # int instead of dict
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._migrate_font_default_family()
+        # Should delete invalid setting and create empty dict for new one
+        assert 'fonts.monospace' not in settings
+        assert settings['fonts.default_family'] == {}
+
+        # Test _migrate_bool with non-dict value
+        settings = {'tabs.favicons.show': 'invalid_string'}
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._migrate_bool('tabs.favicons.show', 'always', 'never')
+        # Should leave invalid setting unchanged
+        assert settings['tabs.favicons.show'] == 'invalid_string'
+
+        # Test _migrate_none with None setting value
+        settings = {'content.headers.user_agent': None}
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._migrate_none('content.headers.user_agent', 'default_value')
+        # Should replace None with default in global scope
+        assert settings['content.headers.user_agent'] == {'global': 'default_value'}
+
+        # Test _migrate_none with non-dict value
+        settings = {'content.headers.user_agent': 42}
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._migrate_none('content.headers.user_agent', 'default_value')
+        # Should leave invalid setting unchanged
+        assert settings['content.headers.user_agent'] == 42
+
+        # Test _migrate_string_value with non-dict value
+        settings = {'tabs.title.format': 123}
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._migrate_string_value('tabs.title.format', r'{title}', r'{current_title}')
+        # Should leave invalid setting unchanged
+        assert settings['tabs.title.format'] == 123
+
+        # Test _remove_empty_patterns with mixed valid/invalid values
+        settings = {
+            'content.javascript.enabled': {
+                'global': False,
+                '*://*./*': True,
+            },
+            'content.cookies.accept': 42  # Invalid type
+        }
+        migrations = configfiles.YamlMigrations(settings)
+        migrations._remove_empty_patterns()
+        # Valid setting should have pattern removed, invalid should be unchanged
+        assert '*://*./*' not in settings['content.javascript.enabled']
+        assert settings['content.cookies.accept'] == 42
+
+    def test_font_default_family_with_invalid_type(self):
+        """Test font default family migration handles invalid types gracefully."""
+        test_cases = [
+            42,  # int
+            'string_value',  # string
+            True,  # bool
+            ['list', 'value'],  # list
+        ]
+
+        for invalid_value in test_cases:
+            settings = {'fonts.monospace': invalid_value}
+            migrations = configfiles.YamlMigrations(settings)
+            migrations._migrate_font_default_family()
+
+            # Invalid setting should be deleted, empty dict created for new setting
+            assert 'fonts.monospace' not in settings
+            assert settings['fonts.default_family'] == {}
+
+    def test_font_replacements_with_invalid_type(self):
+        """Test font replacements migration handles invalid types gracefully."""
+        test_cases = [
+            42,  # int
+            'string_value',  # string
+            True,  # bool
+            ['list', 'value'],  # list
+        ]
+
+        for invalid_value in test_cases:
+            settings = {'fonts.hints': invalid_value}
+            migrations = configfiles.YamlMigrations(settings)
+            migrations._migrate_font_replacements()
+
+            # Invalid setting should remain unchanged
+            assert settings['fonts.hints'] == invalid_value
+
+    def test_migrate_to_multiple_with_invalid_type(self):
+        """Test migrate to multiple handles invalid types gracefully."""
+        test_cases = [
+            42,  # int
+            'string_value',  # string
+            True,  # bool
+            ['list', 'value'],  # list
+        ]
+
+        for invalid_value in test_cases:
+            settings = {'fonts.tabs': invalid_value}
+            migrations = configfiles.YamlMigrations(settings)
+            migrations._migrate_to_multiple('fonts.tabs', ['fonts.tabs.selected', 'fonts.tabs.unselected'])
+
+            # Invalid old setting should be deleted, no new settings created
+            assert 'fonts.tabs' not in settings
+            assert 'fonts.tabs.selected' not in settings
+            assert 'fonts.tabs.unselected' not in settings
+
+    def test_bool_migration_with_invalid_type(self):
+        """Test bool migration handles invalid types gracefully."""
+        test_cases = [
+            42,  # int
+            'string_value',  # string
+            ['list', 'value'],  # list
+        ]
+
+        for invalid_value in test_cases:
+            settings = {'tabs.favicons.show': invalid_value}
+            migrations = configfiles.YamlMigrations(settings)
+            migrations._migrate_bool('tabs.favicons.show', 'always', 'never')
+
+            # Invalid setting should remain unchanged
+            assert settings['tabs.favicons.show'] == invalid_value
+
+    def test_mixed_valid_invalid_migration(self):
+        """Test that valid migrations work correctly when invalid settings exist."""
+        settings = {
+            'fonts.monospace': {'global': 'Custom Font'},  # Valid
+            'fonts.hints': 42,  # Invalid int
+            'tabs.favicons.show': {'global': True},  # Valid
+            'content.cookies.accept': 'invalid_string',  # Invalid
+        }
+
+        migrations = configfiles.YamlMigrations(settings)
+
+        # Run font migration
+        migrations._migrate_font_default_family()
+
+        # Run font replacements (should skip invalid fonts.hints)
+        migrations._migrate_font_replacements()
+
+        # Run bool migration
+        migrations._migrate_bool('tabs.favicons.show', 'always', 'never')
+
+        # Valid font migration should work
+        assert 'fonts.monospace' not in settings
+        assert settings['fonts.default_family']['global'] == ['Custom Font']
+
+        # Invalid font setting should remain unchanged
+        assert settings['fonts.hints'] == 42
+
+        # Valid bool migration should work
+        assert settings['tabs.favicons.show']['global'] == 'always'
+
+        # Invalid setting should remain unchanged
+        assert settings['content.cookies.accept'] == 'invalid_string'
+
 
 class ConfPy:
 
