@@ -32,21 +32,25 @@ def gentoo_versions():
     ("auto", "5.15.2", [("preferredColorScheme", "2")]),  # QTBUG-89753
     ("auto", "5.15.3", []),
     ("auto", "6.2.0", []),
+    ("auto", "6.6.0", []),
 
     # Unset
     (None, "5.15.2", [("preferredColorScheme", "2")]),  # QTBUG-89753
     (None, "5.15.3", []),
     (None, "6.2.0", []),
+    (None, "6.6.0", []),
 
     # Dark
     ("dark", "5.15.2", [("preferredColorScheme", "1")]),
     ("dark", "5.15.3", [("preferredColorScheme", "0")]),
     ("dark", "6.2.0", [("preferredColorScheme", "0")]),
+    ("dark", "6.6.0", [("preferredColorScheme", "0")]),
 
     # Light
     ("light", "5.15.2", [("preferredColorScheme", "2")]),
     ("light", "5.15.3", [("preferredColorScheme", "1")]),
     ("light", "6.2.0", [("preferredColorScheme", "1")]),
+    ("light", "6.6.0", [("preferredColorScheme", "1")]),
 ])
 def test_colorscheme(config_stub, value, webengine_version, expected):
     versions = version.WebEngineVersions.from_pyqt(webengine_version)
@@ -125,11 +129,22 @@ QT_64_SETTINGS = {
     ],
 }
 
+QT_66_SETTINGS = {
+    'blink-settings': [('forceDarkModeEnabled', 'true')],
+    'dark-mode-settings': [
+        ('InversionAlgorithm', '1'),
+        ('ImagePolicy', '2'),
+        ('ForegroundBrightnessThreshold', '100'),
+        ('ImageClassifierPolicy', '0'),  # kTransferable (default ML-based)
+    ],
+}
+
 
 @pytest.mark.parametrize('qversion, expected', [
     ('5.15.2', QT_515_2_SETTINGS),
     ('5.15.3', QT_515_3_SETTINGS),
     ('6.4', QT_64_SETTINGS),
+    ('6.6', QT_66_SETTINGS),
 ])
 def test_qt_version_differences(config_stub, qversion, expected):
     settings = {
@@ -151,6 +166,8 @@ def test_qt_version_differences(config_stub, qversion, expected):
     ('policy.page', 'smart',
      'PagePolicy', '1'),
     ('policy.images', 'smart',
+     'ImagePolicy', '2'),
+    ('policy.images', 'smart-simple',
      'ImagePolicy', '2'),
     ('threshold.foreground', 100,
      'TextBrightnessThreshold', '100'),
@@ -178,6 +195,10 @@ def test_customization(config_stub, setting, value, exp_key, exp_val):
     ('5.15.2', darkmode.Variant.qt_515_2),
     ('5.15.3', darkmode.Variant.qt_515_3),
     ('6.2.0', darkmode.Variant.qt_515_3),
+    ('6.4.0', darkmode.Variant.qt_64),
+    ('6.5.0', darkmode.Variant.qt_64),
+    ('6.6.0', darkmode.Variant.qt_66),
+    ('6.7.0', darkmode.Variant.qt_66),
 ])
 def test_variant(webengine_version, expected):
     versions = version.WebEngineVersions.from_pyqt(webengine_version)
@@ -220,6 +241,79 @@ def test_pass_through_existing_settings(config_stub, flag, expected):
         ('forceDarkModeImagePolicy', '2'),
     ]
     assert settings['blink-settings'] == expected + dark_mode_expected
+
+
+@pytest.mark.parametrize('qversion, image_policy, expected_classifier_policy', [
+    # Qt 6.6+: should have ImageClassifierPolicy setting
+    ('6.6.0', 'smart', '0'),  # kTransferable (ML-based)
+    ('6.6.0', 'smart-simple', '1'),  # kSimple (non-ML)
+    # Qt <6.6: should not have ImageClassifierPolicy setting
+    ('6.4.0', 'smart', None),
+    ('6.4.0', 'smart-simple', None),
+    ('5.15.3', 'smart', None),
+    ('5.15.3', 'smart-simple', None),
+])
+def test_image_classifier_policy(config_stub, qversion, image_policy, expected_classifier_policy):
+    """Test ImageClassifierPolicy setting behavior across Qt versions."""
+    config_stub.val.colors.webpage.darkmode.enabled = True
+    config_stub.val.colors.webpage.darkmode.policy.images = image_policy
+
+    versions = version.WebEngineVersions.from_pyqt(qversion)
+    darkmode_settings = darkmode.settings(versions=versions, special_flags=[])
+
+    # Check if ImageClassifierPolicy is present in the settings
+    dark_mode_settings = darkmode_settings.get('dark-mode-settings', [])
+    classifier_policies = [setting for setting in dark_mode_settings if setting[0] == 'ImageClassifierPolicy']
+
+    if expected_classifier_policy is None:
+        assert len(classifier_policies) == 0, f"Expected no ImageClassifierPolicy for Qt {qversion}"
+    else:
+        assert len(classifier_policies) == 1, f"Expected exactly one ImageClassifierPolicy for Qt {qversion}"
+        assert classifier_policies[0][1] == expected_classifier_policy
+
+
+@pytest.mark.parametrize('qversion, image_policy', [
+    # Test that both 'smart' and 'smart-simple' behave identically on older Qt versions
+    ('6.4.0', 'smart'),
+    ('6.4.0', 'smart-simple'),
+    ('5.15.3', 'smart'),
+    ('5.15.3', 'smart-simple'),
+])
+def test_image_policy_compatibility(config_stub, qversion, image_policy):
+    """Test that 'smart' and 'smart-simple' behave identically on older Qt versions."""
+    config_stub.val.colors.webpage.darkmode.enabled = True
+    config_stub.val.colors.webpage.darkmode.policy.images = image_policy
+
+    versions = version.WebEngineVersions.from_pyqt(qversion)
+    darkmode_settings = darkmode.settings(versions=versions, special_flags=[])
+
+    # Both should produce the same ImagePolicy=2 without classifier policy
+    dark_mode_settings = darkmode_settings.get('dark-mode-settings', [])
+    image_policies = [setting for setting in dark_mode_settings if setting[0] == 'ImagePolicy']
+    classifier_policies = [setting for setting in dark_mode_settings if setting[0] == 'ImageClassifierPolicy']
+
+    assert len(image_policies) == 1, "Should have exactly one ImagePolicy"
+    assert image_policies[0][1] == '2', "Should be ImagePolicy=2 (smart)"
+    assert len(classifier_policies) == 0, "Should have no ImageClassifierPolicy on older Qt"
+
+
+def test_chromium_tuple_none_handling():
+    """Test that chromium_tuple can return None for unmapped values."""
+    # Test with a setting that has a mapping
+    setting = darkmode._Setting('test', 'TestKey', {'valid': '1'})
+
+    # Valid value should return tuple
+    result = setting.chromium_tuple('valid')
+    assert result == ('TestKey', '1')
+
+    # Invalid value should return None
+    result = setting.chromium_tuple('invalid')
+    assert result is None
+
+    # Test with a setting that has no mapping (should always return tuple)
+    setting_no_mapping = darkmode._Setting('test', 'TestKey', None)
+    result = setting_no_mapping.chromium_tuple('any_value')
+    assert result == ('TestKey', 'any_value')
 
 
 def test_options(configdata_init):
