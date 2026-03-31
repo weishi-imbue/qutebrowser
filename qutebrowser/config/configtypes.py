@@ -1001,25 +1001,21 @@ class QtColor(BaseType):
     * `hsv(h, s, v)` / `hsva(h, s, v, a)` (values 0-255, hue 0-359)
     """
 
-    def _parse_value(self, val: str, maxval: int = 255) -> int:
+    def _parse_value(self, val: str) -> int:
         try:
             return int(val)
         except ValueError:
             pass
 
-        percentage = val.endswith('%')
-        if percentage:
+        mult = 255.0
+        if val.endswith('%'):
             val = val[:-1]
+            mult = 255.0 / 100
 
         try:
-            num = float(val)
+            return int(float(val) * mult)
         except ValueError:
             raise configexc.ValidationError(val, "must be a valid color value")
-
-        if percentage:
-            return round(maxval * num / 100)
-        else:
-            return round(maxval * num)
 
     def to_py(self, value: _StrUnset) -> typing.Union[configutils.Unset,
                                                       None, QColor]:
@@ -1033,19 +1029,14 @@ class QtColor(BaseType):
             openparen = value.index('(')
             kind = value[:openparen]
             vals = value[openparen+1:-1].split(',')
-            if kind == 'rgba' and len(vals) == 4:
-                int_vals = [self._parse_value(v) for v in vals]
+            int_vals = [self._parse_value(v) for v in vals]
+            if kind == 'rgba' and len(int_vals) == 4:
                 return QColor.fromRgb(*int_vals)
-            elif kind == 'rgb' and len(vals) == 3:
-                int_vals = [self._parse_value(v) for v in vals]
+            elif kind == 'rgb' and len(int_vals) == 3:
                 return QColor.fromRgb(*int_vals)
-            elif kind == 'hsva' and len(vals) == 4:
-                int_vals = ([self._parse_value(vals[0], maxval=359)] +
-                            [self._parse_value(v) for v in vals[1:]])
+            elif kind == 'hsva' and len(int_vals) == 4:
                 return QColor.fromHsv(*int_vals)
-            elif kind == 'hsv' and len(vals) == 3:
-                int_vals = ([self._parse_value(vals[0], maxval=359)] +
-                            [self._parse_value(v) for v in vals[1:]])
+            elif kind == 'hsv' and len(int_vals) == 3:
                 return QColor.fromHsv(*int_vals)
             else:
                 raise configexc.ValidationError(value, "must be a valid color")
