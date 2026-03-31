@@ -125,22 +125,11 @@ QT_64_SETTINGS = {
     ],
 }
 
-QT_66_SETTINGS = {
-    'blink-settings': [('forceDarkModeEnabled', 'true')],
-    'dark-mode-settings': [
-        ('InversionAlgorithm', '1'),
-        ('ImagePolicy', '2'),
-        ('ForegroundBrightnessThreshold', '100'),
-        ('ImageClassifierPolicy', '0'),
-    ],
-}
-
 
 @pytest.mark.parametrize('qversion, expected', [
     ('5.15.2', QT_515_2_SETTINGS),
     ('5.15.3', QT_515_3_SETTINGS),
     ('6.4', QT_64_SETTINGS),
-    ('6.6', QT_66_SETTINGS),
 ])
 def test_qt_version_differences(config_stub, qversion, expected):
     settings = {
@@ -189,10 +178,6 @@ def test_customization(config_stub, setting, value, exp_key, exp_val):
     ('5.15.2', darkmode.Variant.qt_515_2),
     ('5.15.3', darkmode.Variant.qt_515_3),
     ('6.2.0', darkmode.Variant.qt_515_3),
-    ('6.4.0', darkmode.Variant.qt_64),
-    ('6.5.0', darkmode.Variant.qt_64),
-    ('6.6.0', darkmode.Variant.qt_66),
-    ('6.7.0', darkmode.Variant.qt_66),
 ])
 def test_variant(webengine_version, expected):
     versions = version.WebEngineVersions.from_pyqt(webengine_version)
@@ -216,68 +201,6 @@ def test_variant_override(monkeypatch, caplog, value, is_valid, expected):
 
     log_msg = 'Ignoring invalid QUTE_DARKMODE_VARIANT=invalid_value'
     assert (log_msg in caplog.messages) != is_valid
-
-
-@pytest.mark.parametrize('qversion, images_policy, expected_dark_mode', [
-    # smart on Qt 6.4 - no ImageClassifierPolicy
-    ('6.4', 'smart', [
-        ('InversionAlgorithm', '1'),
-        ('ImagePolicy', '2'),
-        ('ForegroundBrightnessThreshold', '100'),
-    ]),
-    # smart-simple on Qt 6.4 - no ImageClassifierPolicy (not supported)
-    ('6.4', 'smart-simple', [
-        ('InversionAlgorithm', '1'),
-        ('ImagePolicy', '2'),
-        ('ForegroundBrightnessThreshold', '100'),
-    ]),
-    # smart on Qt 6.6 - ImageClassifierPolicy=0 (kTransferable)
-    ('6.6', 'smart', [
-        ('InversionAlgorithm', '1'),
-        ('ImagePolicy', '2'),
-        ('ForegroundBrightnessThreshold', '100'),
-        ('ImageClassifierPolicy', '0'),
-    ]),
-    # smart-simple on Qt 6.6 - ImageClassifierPolicy=1 (kSimple)
-    ('6.6', 'smart-simple', [
-        ('InversionAlgorithm', '1'),
-        ('ImagePolicy', '2'),
-        ('ForegroundBrightnessThreshold', '100'),
-        ('ImageClassifierPolicy', '1'),
-    ]),
-])
-def test_image_classifier_policy(config_stub, qversion, images_policy,
-                                 expected_dark_mode):
-    settings = {
-        'enabled': True,
-        'algorithm': 'brightness-rgb',
-        'policy.images': images_policy,
-        'threshold.foreground': 100,
-    }
-    for k, v in settings.items():
-        config_stub.set_obj('colors.webpage.darkmode.' + k, v)
-
-    versions = version.WebEngineVersions.from_pyqt(qversion)
-    darkmode_settings = darkmode.settings(versions=versions, special_flags=[])
-    assert darkmode_settings['dark-mode-settings'] == expected_dark_mode
-
-
-def test_chromium_tuple_returns_none_for_unmapped_value():
-    """chromium_tuple returns None when value is not in mapping."""
-    setting = darkmode._Setting('test', 'TestKey', {'a': 1, 'b': 2})
-    assert setting.chromium_tuple('c') is None
-
-
-def test_chromium_tuple_returns_tuple_for_mapped_value():
-    """chromium_tuple returns a tuple when value is in mapping."""
-    setting = darkmode._Setting('test', 'TestKey', {'a': 1, 'b': 2})
-    assert setting.chromium_tuple('a') == ('TestKey', '1')
-
-
-def test_chromium_tuple_no_mapping():
-    """chromium_tuple with no mapping always returns the value as string."""
-    setting = darkmode._Setting('test', 'TestKey', None)
-    assert setting.chromium_tuple(42) == ('TestKey', '42')
 
 
 @pytest.mark.parametrize('flag, expected', [

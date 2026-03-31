@@ -107,14 +107,6 @@ Qt 6.5
 
 - IncreaseTextContrast removed:
   https://chromium-review.googlesource.com/c/chromium/src/+/3821841
-
-Qt 6.6
-------
-
-- New ImageClassifierPolicy:
-  Allows choosing a simpler, non-ML image classifier for dark mode.
-  0: kTransferable (default, ML-based)
-  1: kSimple (simpler, non-ML)
 """
 
 import os
@@ -139,7 +131,6 @@ class Variant(enum.Enum):
     qt_515_2 = enum.auto()
     qt_515_3 = enum.auto()
     qt_64 = enum.auto()
-    qt_66 = enum.auto()
 
 
 # Mapping from a colors.webpage.darkmode.algorithm setting value to
@@ -166,16 +157,6 @@ _IMAGE_POLICIES = {
     'always': 0,  # kFilterAll
     'never': 1,  # kFilterNone
     'smart': 2,  # kFilterSmart
-    'smart-simple': 2,  # kFilterSmart (with simple classifier on Qt 6.6+)
-}
-
-# Mapping from a colors.webpage.darkmode.policy.images setting value to
-# Chromium's DarkModeImageClassifierPolicy enum values (Qt 6.6+).
-# Only entries for 'smart' and 'smart-simple' are included; other image policy
-# values intentionally omit this key (handled via None-skipping in settings()).
-_IMAGE_CLASSIFIER_POLICIES = {
-    'smart': 0,  # kTransferable
-    'smart-simple': 1,  # kSimple
 }
 
 # Mapping from a colors.webpage.darkmode.policy.page setting value to
@@ -210,9 +191,7 @@ class _Setting:
             return str(value)
         return str(self.mapping[value])
 
-    def chromium_tuple(self, value: Any) -> Optional[Tuple[str, str]]:
-        if self.mapping is not None and value not in self.mapping:
-            return None
+    def chromium_tuple(self, value: Any) -> Tuple[str, str]:
         return self.chromium_key, self._value_str(value)
 
     def with_prefix(self, prefix: str) -> '_Setting':
@@ -331,9 +310,6 @@ _DEFINITIONS: MutableMapping[Variant, _Definition] = {
 _DEFINITIONS[Variant.qt_64] = _DEFINITIONS[Variant.qt_515_3].copy_replace_setting(
     'threshold.foreground', 'ForegroundBrightnessThreshold',
 )
-_DEFINITIONS[Variant.qt_66] = _DEFINITIONS[Variant.qt_64].copy_add_setting(
-    _Setting('policy.images', 'ImageClassifierPolicy', _IMAGE_CLASSIFIER_POLICIES),
-)
 
 
 _SettingValType = Union[str, usertypes.Unset]
@@ -357,12 +333,7 @@ _PREFERRED_COLOR_SCHEME_DEFINITIONS: Mapping[Variant, Mapping[_SettingValType, s
     Variant.qt_64: {
         "dark": "0",
         "light": "1",
-    },
-
-    Variant.qt_66: {
-        "dark": "0",
-        "light": "1",
-    },
+    }
 }
 
 
@@ -375,9 +346,7 @@ def _variant(versions: version.WebEngineVersions) -> Variant:
         except KeyError:
             log.init.warning(f"Ignoring invalid QUTE_DARKMODE_VARIANT={env_var}")
 
-    if versions.webengine >= utils.VersionNumber(6, 6):
-        return Variant.qt_66
-    elif versions.webengine >= utils.VersionNumber(6, 4):
+    if versions.webengine >= utils.VersionNumber(6, 4):
         return Variant.qt_64
     elif (versions.webengine == utils.VersionNumber(5, 15, 2) and
             versions.chromium_major == 87):
@@ -440,8 +409,6 @@ def settings(
         if isinstance(value, usertypes.Unset):
             continue
 
-        chromium = setting.chromium_tuple(value)
-        if chromium is not None:
-            result[switch_name].append(chromium)
+        result[switch_name].append(setting.chromium_tuple(value))
 
     return result

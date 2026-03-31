@@ -1708,7 +1708,6 @@ Valid values:
  * +always+: Apply dark mode filter to all images.
  * +never+: Never apply dark mode filter to any images.
  * +smart+: Apply dark mode based on image content. Not available with Qt 5.15.0.
- * +smart-simple+: Like smart, but uses a simpler (non-ML) image classifier. Only effective on QtWebEngine 6.6+; behaves like smart on older versions.
 
 Default: +pass:[smart]+
 
