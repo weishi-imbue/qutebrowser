@@ -296,6 +296,7 @@ class ModuleInfo:
             module = importlib.import_module(self.name)
         except (ImportError, ValueError):
             self._installed = False
+            self._initialized = True
             return
         else:
             self._installed = True
@@ -306,6 +307,8 @@ class ModuleInfo:
                 assert isinstance(version, (str, float))
                 self._version = str(version)
                 break
+
+        self._initialized = True
 
     def get_version(self) -> Optional[str]:
         """Finds the module version if it exists."""
