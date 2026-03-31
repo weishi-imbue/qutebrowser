@@ -1009,14 +1009,15 @@ class QtColor(BaseType):
 
         if val.endswith('%'):
             val = val[:-1]
-            mult = maxval / 100
+            try:
+                return round(float(val) * maxval / 100)
+            except ValueError:
+                raise configexc.ValidationError(val, "must be a valid color value")
         else:
-            mult = maxval / 1.0
-
-        try:
-            return int(float(val) * mult)
-        except ValueError:
-            raise configexc.ValidationError(val, "must be a valid color value")
+            try:
+                return round(float(val))
+            except ValueError:
+                raise configexc.ValidationError(val, "must be a valid color value")
 
     def to_py(self, value: _StrUnset) -> typing.Union[configutils.Unset,
                                                       None, QColor]:
