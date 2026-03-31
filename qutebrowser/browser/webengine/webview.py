@@ -4,7 +4,8 @@
 
 """The main browser widget for QtWebEngine."""
 
-from typing import List, Iterable
+import mimetypes
+from typing import List, Iterable, Set
 
 from qutebrowser.qt import machinery
 from qutebrowser.qt.core import pyqtSignal, pyqtSlot, QUrl
@@ -15,7 +16,43 @@ from qutebrowser.qt.webenginecore import QWebEnginePage, QWebEngineCertificateEr
 from qutebrowser.browser import shared
 from qutebrowser.browser.webengine import webenginesettings, certificateerror
 from qutebrowser.config import config
-from qutebrowser.utils import log, debug, usertypes
+from qutebrowser.utils import log, debug, usertypes, qtutils
+
+
+def extra_suffixes_workaround(upstream_mimetypes: Iterable[str]) -> Set[str]:
+    """Return extra file suffixes for given mimetypes not already in the input.
+
+    Workaround for a Qt bug where some extensions (e.g., .jpg for image/jpeg)
+    are missing in file pickers for Qt versions >=6.2.3 and <6.7.0.
+    """
+    if not qtutils.version_check("6.2.3", compiled=False) or \
+            qtutils.version_check("6.7.0", compiled=False):
+        return set()
+
+    existing_suffixes = set()
+    mime_types = []
+    for entry in upstream_mimetypes:
+        if entry.startswith("."):
+            existing_suffixes.add(entry.lower())
+        else:
+            mime_types.append(entry)
+
+    extra = set()
+    for mime_type in mime_types:
+        if mime_type.endswith("/*"):
+            prefix = mime_type[:-1]  # e.g. "image/"
+            # Get all known extensions whose MIME type starts with this prefix
+            types_map = mimetypes.types_map
+            for ext, mt in types_map.items():
+                if mt.startswith(prefix) and ext.lower() not in existing_suffixes:
+                    extra.add(ext.lower())
+        else:
+            all_extensions = mimetypes.guess_all_extensions(mime_type)
+            for ext in all_extensions:
+                if ext.lower() not in existing_suffixes:
+                    extra.add(ext.lower())
+
+    return extra
 
 
 _QB_FILESELECTION_MODES = {
@@ -265,6 +302,11 @@ class WebEnginePage(QWebEnginePage):
         accepted_mimetypes: Iterable[str],
     ) -> List[str]:
         """Override chooseFiles to (optionally) invoke custom file uploader."""
+        accepted_mimetypes = list(accepted_mimetypes)
+        extra = extra_suffixes_workaround(accepted_mimetypes)
+        if extra:
+            accepted_mimetypes = accepted_mimetypes + list(extra)
+
         handler = config.val.fileselect.handler
         if handler == "default":
             return super().chooseFiles(mode, old_files, accepted_mimetypes)
