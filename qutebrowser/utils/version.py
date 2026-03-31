@@ -280,18 +280,8 @@ class ModuleInfo:
         self._version: Optional[str] = None
         self._initialized = False
 
-    def _reset_cache(self) -> None:
-        """Invalidate cached module-version detection.
-
-        Subsequent checks will recompute installation state and version.
-        """
-        self._installed = False
-        self._version = None
-        self._initialized = False
-
     def _initialize_info(self) -> None:
         """Import module and set `self.installed` and `self.version`."""
-        self._version = None
         try:
             module = importlib.import_module(self.name)
         except (ImportError, ValueError):
@@ -299,8 +289,6 @@ class ModuleInfo:
             return
         else:
             self._installed = True
-        finally:
-            self._initialized = True
 
         for attribute_name in self._version_attributes:
             if hasattr(module, attribute_name):
@@ -342,7 +330,7 @@ MODULE_INFO: Mapping[str, ModuleInfo] = collections.OrderedDict([
     (name, ModuleInfo(name, version_attributes, min_version))
     for (name, version_attributes, min_version) in
     (
-        ('sip', ('SIP_VERSION_STR',), None),
+        ('sip', ('SIP_VERSION_STR'), None),
         ('colorama', ('VERSION', '__version__'), None),
         ('pypeg2', ('__version__',), None),
         ('jinja2', ('__version__',), None),

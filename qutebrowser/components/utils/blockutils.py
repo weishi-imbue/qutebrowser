@@ -142,8 +142,8 @@ class BlocklistDownloads(QObject):
             download: The finished download.
         """
         self._in_progress.remove(download)
-        self._done_count += 1
         if download.successful:
+            self._done_count += 1
             assert not isinstance(download.fileobj, downloads.UnsupportedAttribute)
             assert download.fileobj is not None
             try:
