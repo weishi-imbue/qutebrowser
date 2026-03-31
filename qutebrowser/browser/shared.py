@@ -153,6 +153,7 @@ _JS_LOGMAP: Mapping[str, Callable[[str], None]] = {
 # Callables to use for content.javascript.log_message.
 # Note that the keys are JS log levels here, not config settings!
 _JS_LOGMAP_MESSAGE: Mapping[usertypes.JsLogLevel, Callable[[str], None]] = {
+    usertypes.JsLogLevel.debug: message.info,  # Debug messages shown as info in UI
     usertypes.JsLogLevel.info: message.info,
     usertypes.JsLogLevel.warning: message.warning,
     usertypes.JsLogLevel.error: message.error,
