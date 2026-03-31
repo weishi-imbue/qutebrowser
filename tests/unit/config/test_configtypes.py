@@ -1250,11 +1250,21 @@ class TestQtColor:
 
         ('rgba(255, 255, 255, 1.0)', QColor.fromRgb(255, 255, 255, 255)),
 
-        # this should be (36, 25, 25) as hue goes to 359
-        # however this is consistent with Qt's CSS parser
-        # https://bugreports.qt.io/browse/QTBUG-70897
-        ('hsv(10%,10%,10%)', QColor.fromHsv(25, 25, 25)),
-        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(25, 51, 76, 102)),
+        # HSV percentage parsing: hue percentages scale to 0-359, others to 0-255
+        ('hsv(10%,10%,10%)', QColor.fromHsv(36, 26, 26)),
+        ('hsva(10%,20%,30%,40%)', QColor.fromHsv(36, 51, 76, 102)),
+
+        # Additional HSV/HSVA test cases with various percentage and numeric values
+        ('hsv(100%, 100%, 100%)', QColor.fromHsv(359, 255, 255)),
+        ('hsv(0%, 0%, 0%)', QColor.fromHsv(0, 0, 0)),
+        ('hsv(50%, 50%, 50%)', QColor.fromHsv(180, 128, 128)),  # 50% of 359=180, 50% of 255=128
+        ('hsv(180, 128, 64)', QColor.fromHsv(180, 128, 64)),  # numeric values
+        ('hsv(359, 255, 255)', QColor.fromHsv(359, 255, 255)),  # boundary values
+
+        ('hsva(100%, 100%, 100%, 100%)', QColor.fromHsv(359, 255, 255, 255)),
+        ('hsva(0%, 0%, 0%, 0%)', QColor.fromHsv(0, 0, 0, 0)),
+        ('hsva(50%, 50%, 50%, 50%)', QColor.fromHsv(180, 128, 128, 128)),  # corrected rounding
+        ('hsva(180, 128, 64, 32)', QColor.fromHsv(180, 128, 64, 32)),  # numeric values
     ])
     def test_valid(self, klass, val, expected):
         assert klass().to_py(val) == expected
@@ -1274,6 +1284,16 @@ class TestQtColor:
         'rgb(1, 2, 3, 4)',
         'rgba(1, 2, 3)',
         'rgb(10%%, 0, 0)',
+
+        # Invalid HSV/HSVA cases
+        'hsv(1, 2)',  # too few components
+        'hsv(1, 2, 3, 4)',  # too many components
+        'hsva(1, 2, 3)',  # too few components for hsva
+        'hsva(1, 2, 3, 4, 5)',  # too many components for hsva
+        'hsv(1, 2, 3',  # missing closing paren
+        'hsv)',  # missing opening paren and values
+        'hsv(10%%, 0, 0)',  # double percent
+        'hsv(abc, 0, 0)',  # non-numeric value
     ])
     def test_invalid(self, klass, val):
         with pytest.raises(configexc.ValidationError):
