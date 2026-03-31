@@ -325,6 +325,7 @@ class JsLogLevel(enum.Enum):
     """
 
     unknown = enum.auto()
+    debug = enum.auto()
     info = enum.auto()
     warning = enum.auto()
     error = enum.auto()
