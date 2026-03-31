@@ -299,6 +299,8 @@ class ModuleInfo:
             return
         else:
             self._installed = True
+        finally:
+            self._initialized = True
 
         for attribute_name in self._version_attributes:
             if hasattr(module, attribute_name):
