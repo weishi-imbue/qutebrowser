@@ -268,17 +268,48 @@ def _find_versions(data: bytes) -> Versions:
     Note that 'data' can actually be a mmap.mmap, but typing doesn't handle that
     correctly: https://github.com/python/typeshed/issues/1467
     """
+    # Try full null-terminated match first
     match = re.search(
         br'\x00QtWebEngine/([0-9.]+) Chrome/([0-9.]+)\x00',
         data,
     )
-    if match is None:
+    if match is not None:
+        try:
+            return Versions(
+                webengine=match.group(1).decode('ascii'),
+                chromium=match.group(2).decode('ascii'),
+            )
+        except UnicodeDecodeError as e:
+            raise ParseError(e)
+
+    # Fallback: partial match without trailing \x00 (Qt 6.4+)
+    partial_match = re.search(
+        br'\x00QtWebEngine/([0-9.]+) Chrome/([0-9.]+)',
+        data,
+    )
+    if partial_match is None:
         raise ParseError("No match in .rodata")
+
+    webengine_bytes = partial_match.group(1)
+    partial_chromium_bytes = partial_match.group(2)
+
+    if b'.' not in partial_chromium_bytes or len(partial_chromium_bytes) < 6:
+        raise ParseError("Inconclusive partial Chromium bytes")
+
+    # Search for the full Chromium version string elsewhere in the data
+    full_match = re.search(
+        b'\x00' + re.escape(partial_chromium_bytes) + br'[0-9.]+\x00',
+        data,
+    )
+    if full_match is None:
+        raise ParseError("No match in .rodata for full version")
+
+    chromium_bytes = full_match.group(0)[1:-1]  # strip surrounding \x00
 
     try:
         return Versions(
-            webengine=match.group(1).decode('ascii'),
-            chromium=match.group(2).decode('ascii'),
+            webengine=webengine_bytes.decode('ascii'),
+            chromium=chromium_bytes.decode('ascii'),
         )
     except UnicodeDecodeError as e:
         raise ParseError(e)
