@@ -239,9 +239,9 @@ def _get_lang_override(
             if _get_locale_pak_path(locales_dir, candidate).exists():
                 return candidate
 
-    # For zh-* locales, try zh-TW then zh-CN
+    # For zh-* locales, try zh-CN then zh-TW
     if normalized.startswith('zh-'):
-        for candidate in ['zh-TW', 'zh-CN']:
+        for candidate in ['zh-CN', 'zh-TW']:
             if _get_locale_pak_path(locales_dir, candidate).exists():
                 return candidate
 
