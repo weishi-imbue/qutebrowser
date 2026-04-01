@@ -773,3 +773,80 @@ def libgl_workaround() -> None:
     libgl = ctypes.util.find_library("GL")
     if libgl is not None:  # pragma: no branch
         ctypes.CDLL(libgl, mode=ctypes.RTLD_GLOBAL)
+
+
+def parse_duration(duration: str) -> int:
+    """Parse a duration string and return the total duration in milliseconds.
+
+    Accepts formats like '1h2m3s', '2m30s', '1.5h', '0.25m', or plain
+    milliseconds like '5000'. Whitespace between components is allowed.
+
+    Args:
+        duration: A duration string (e.g. '2m30s', '1.5h', '5000').
+
+    Returns:
+        The total duration in milliseconds as an integer.
+
+    Raises:
+        ValueError: If the input is invalid.
+    """
+    if not duration or not duration.strip():
+        raise ValueError("Duration string is empty or whitespace.")
+
+    stripped = duration.strip()
+
+    # Plain numeric input: interpret as milliseconds
+    if stripped.isdigit():
+        ms = int(stripped)
+        if ms < 0:
+            raise ValueError("I can't run something in the past!")
+        return ms
+
+    # Try parsing as a plain number (e.g. negative or float without units)
+    try:
+        val = float(stripped)
+    except ValueError:
+        pass
+    else:
+        if val < 0:
+            raise ValueError("I can't run something in the past!")
+        return int(val)
+
+    # Parse unit-based format: XhYmZs
+    total_ms = 0.0
+    found = False
+    pattern = re.compile(r'(\d+(?:\.\d+)?)\s*([hHmMsS])')
+    pos = 0
+    s = stripped
+
+    while pos < len(s):
+        # Skip whitespace
+        while pos < len(s) and s[pos].isspace():
+            pos += 1
+        if pos >= len(s):
+            break
+
+        match = pattern.match(s, pos)
+        if not match:
+            raise ValueError(f"Invalid duration string: {duration!r}")
+
+        value = float(match.group(1))
+        unit = match.group(2).lower()
+
+        if unit == 'h':
+            total_ms += value * 3600 * 1000
+        elif unit == 'm':
+            total_ms += value * 60 * 1000
+        elif unit == 's':
+            total_ms += value * 1000
+
+        found = True
+        pos = match.end()
+
+    if not found:
+        raise ValueError(f"Invalid duration string: {duration!r}")
+
+    if total_ms < 0:
+        raise ValueError("I can't run something in the past!")
+
+    return int(total_ms)
