@@ -135,6 +135,7 @@ class Values:
             pattern: urlmatch.UrlPattern = None) -> None:
         """Add a value with the given pattern to the list of values."""
         self._check_pattern_support(pattern)
+        self._vmap.pop(pattern, None)
         scoped = ScopedValue(value, pattern)
         self._vmap[pattern] = scoped
 
