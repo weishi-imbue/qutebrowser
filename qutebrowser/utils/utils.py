@@ -805,11 +805,12 @@ def parse_duration(duration: str) -> int:
     # Try parsing as a plain number (e.g. negative or float without units)
     try:
         val = float(stripped)
+    except ValueError:
+        pass
+    else:
         if val < 0:
             raise ValueError("Duration must not be negative.")
         return int(val)
-    except ValueError:
-        pass
 
     # Parse unit-based format: XhYmZs
     total_ms = 0.0
@@ -820,7 +821,7 @@ def parse_duration(duration: str) -> int:
 
     while pos < len(s):
         # Skip whitespace
-        while pos < len(s) and s[pos] == ' ':
+        while pos < len(s) and s[pos].isspace():
             pos += 1
         if pos >= len(s):
             break
