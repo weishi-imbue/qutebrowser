@@ -214,8 +214,6 @@ def init(args: Optional[argparse.Namespace] = None) -> SelectionInfo:
         # should not be any implicit initialization (qutebrowser.qt imports) before it.
         if _initialized:  # pylint: disable=else-if-used
             raise Error("init() already called before application init")
-    _initialized = True
-
     for name in WRAPPERS:
         # If any Qt wrapper has been imported before this, all hope is lost.
         if name in sys.modules:
@@ -233,5 +231,7 @@ def init(args: Optional[argparse.Namespace] = None) -> SelectionInfo:
     IS_PYSIDE = USE_PYSIDE6
     assert IS_QT5 ^ IS_QT6
     assert IS_PYQT ^ IS_PYSIDE
+
+    _initialized = True
 
     return INFO

@@ -147,6 +147,11 @@ def check_qt_available(info):
     if info.wrapper is None:
         raise machinery.NoWrapperAvailableError(info)
 
+    try:
+        importlib.import_module(info.wrapper)
+    except ImportError:
+        raise machinery.NoWrapperAvailableError(info)
+
 
 def check_pyqt():
     """Check if PyQt core modules (QtCore/QtWidgets) are installed."""
