@@ -53,8 +53,6 @@ def later(duration: str, command: str, win_id: int) -> None:
         ms = utils.parse_duration(duration)
     except ValueError as e:
         raise cmdutils.CommandError(str(e))
-    if ms < 0:
-        raise cmdutils.CommandError("I can't run something in the past!")
     commandrunner = runners.CommandRunner(win_id)
     timer = usertypes.Timer(name='later', parent=QApplication.instance())
     try:
