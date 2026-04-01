@@ -216,22 +216,26 @@ def init(args: Optional[argparse.Namespace] = None) -> SelectionInfo:
             raise Error("init() already called before application init")
     _initialized = True
 
-    for name in WRAPPERS:
-        # If any Qt wrapper has been imported before this, all hope is lost.
-        if name in sys.modules:
-            raise Error(f"{name} already imported")
+    try:
+        for name in WRAPPERS:
+            # If any Qt wrapper has been imported before this, all hope is lost.
+            if name in sys.modules:
+                raise Error(f"{name} already imported")
 
-    INFO = _select_wrapper(args)
-    USE_PYQT5 = INFO.wrapper == "PyQt5"
-    USE_PYQT6 = INFO.wrapper == "PyQt6"
-    USE_PYSIDE6 = INFO.wrapper == "PySide6"
-    assert USE_PYQT5 ^ USE_PYQT6 ^ USE_PYSIDE6
+        INFO = _select_wrapper(args)
+        USE_PYQT5 = INFO.wrapper == "PyQt5"
+        USE_PYQT6 = INFO.wrapper == "PyQt6"
+        USE_PYSIDE6 = INFO.wrapper == "PySide6"
+        assert USE_PYQT5 ^ USE_PYQT6 ^ USE_PYSIDE6
 
-    IS_QT5 = USE_PYQT5
-    IS_QT6 = USE_PYQT6 or USE_PYSIDE6
-    IS_PYQT = USE_PYQT5 or USE_PYQT6
-    IS_PYSIDE = USE_PYSIDE6
-    assert IS_QT5 ^ IS_QT6
-    assert IS_PYQT ^ IS_PYSIDE
+        IS_QT5 = USE_PYQT5
+        IS_QT6 = USE_PYQT6 or USE_PYSIDE6
+        IS_PYQT = USE_PYQT5 or USE_PYQT6
+        IS_PYSIDE = USE_PYSIDE6
+        assert IS_QT5 ^ IS_QT6
+        assert IS_PYQT ^ IS_PYSIDE
+    except Exception:
+        _initialized = False
+        raise
 
     return INFO

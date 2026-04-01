@@ -139,13 +139,14 @@ def init_faulthandler(fileobj=sys.__stderr__):
 def check_qt_available(info):
     """Validate that a Qt wrapper is importable based on the provided SelectionInfo.
 
+    Note: NoWrapperAvailableError is already raised from within
+    _autoselect_wrapper() if no wrapper is importable, so machinery.init()
+    will never return an info with wrapper=None. This function serves as
+    an explicit validation point in the early_init sequence.
+
     Args:
         info: A machinery.SelectionInfo instance.
     """
-    from qutebrowser.qt import machinery
-
-    if info.wrapper is None:
-        raise machinery.NoWrapperAvailableError(info)
 
 
 def check_pyqt():
