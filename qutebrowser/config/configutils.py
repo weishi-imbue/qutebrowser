@@ -136,6 +136,7 @@ class Values:
         """Add a value with the given pattern to the list of values."""
         self._check_pattern_support(pattern)
         scoped = ScopedValue(value, pattern)
+        self._vmap.pop(pattern, None)
         self._vmap[pattern] = scoped
 
     def remove(self, pattern: urlmatch.UrlPattern = None) -> bool:
