@@ -4,8 +4,7 @@
 
 """The main browser widget for QtWebEngine."""
 
-import mimetypes
-from typing import List, Iterable, Set
+from typing import List, Iterable
 
 from qutebrowser.qt import machinery
 from qutebrowser.qt.core import pyqtSignal, pyqtSlot, QUrl
@@ -16,7 +15,7 @@ from qutebrowser.qt.webenginecore import QWebEnginePage, QWebEngineCertificateEr
 from qutebrowser.browser import shared
 from qutebrowser.browser.webengine import webenginesettings, certificateerror
 from qutebrowser.config import config
-from qutebrowser.utils import log, debug, usertypes, qtutils
+from qutebrowser.utils import log, debug, usertypes
 
 
 _QB_FILESELECTION_MODES = {
@@ -259,33 +258,6 @@ class WebEnginePage(QWebEnginePage):
         self.navigation_request.emit(navigation)
         return navigation.accepted
 
-    @staticmethod
-    def extra_suffixes_workaround(upstream_mimetypes: Iterable[str]) -> Set[str]:
-        """Return additional file suffixes missing from upstream_mimetypes.
-
-        Workaround for https://bugreports.qt.io/browse/QTBUG-116905
-        affecting Qt versions > 6.2.2 and < 6.7.0.
-        """
-        if not qtutils.version_check('6.2.3', compiled=False) or \
-                qtutils.version_check('6.7.0', compiled=False):
-            return set()
-
-        existing_suffixes = set()
-        mime_entries = []
-        for entry in upstream_mimetypes:
-            if entry.startswith("."):
-                existing_suffixes.add(entry)
-            elif "/" in entry:
-                mime_entries.append(entry)
-
-        extra = set()
-        for mime in mime_entries:
-            for suffix in mimetypes.guess_all_extensions(mime):
-                if suffix not in existing_suffixes:
-                    extra.add(suffix)
-
-        return extra
-
     def chooseFiles(
         self,
         mode: QWebEnginePage.FileSelectionMode,
@@ -293,10 +265,6 @@ class WebEnginePage(QWebEnginePage):
         accepted_mimetypes: Iterable[str],
     ) -> List[str]:
         """Override chooseFiles to (optionally) invoke custom file uploader."""
-        extra = self.extra_suffixes_workaround(accepted_mimetypes)
-        if extra:
-            accepted_mimetypes = list(accepted_mimetypes) + list(extra)
-
         handler = config.val.fileselect.handler
         if handler == "default":
             return super().chooseFiles(mode, old_files, accepted_mimetypes)
