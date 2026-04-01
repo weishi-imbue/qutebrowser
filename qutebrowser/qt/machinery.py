@@ -32,6 +32,14 @@ class Error(Exception):
     """Base class for all exceptions in this module."""
 
 
+class NoWrapperAvailableError(Error, ImportError):
+    """Raised when no Qt wrapper could be imported."""
+
+    def __init__(self, info: 'SelectionInfo') -> None:
+        self.info = info
+        super().__init__(f"No Qt wrapper was importable.\n\n{info}\n\n")
+
+
 class Unavailable(Error, ImportError):
 
     """Raised when a module is unavailable with the given wrapper."""
@@ -84,7 +92,10 @@ class SelectionInfo:
         setattr(self, name.lower(), outcome)
 
     def __str__(self) -> str:
-        lines = ["Qt wrapper:"]
+        if self.pyqt5 is None and self.pyqt6 is None:
+            return f"Qt wrapper: {self.wrapper} (via {self.reason.value})"
+
+        lines = ["Qt wrapper info:"]
         if self.pyqt5 is not None:
             lines.append(f"PyQt5: {self.pyqt5}")
         if self.pyqt6 is not None:
@@ -106,16 +117,14 @@ def _autoselect_wrapper() -> SelectionInfo:
         try:
             importlib.import_module(wrapper)
         except ImportError as e:
-            info.set_module(wrapper, str(e))
+            info.set_module(wrapper, f"{type(e).__name__}: {e}")
             continue
 
         info.set_module(wrapper, "success")
         info.wrapper = wrapper
         return info
 
-    # FIXME return a SelectionInfo here instead so we can handle this in earlyinit?
-    wrappers = ", ".join(WRAPPERS)
-    raise Error(f"No Qt wrapper found, tried {wrappers}")
+    raise NoWrapperAvailableError(info)
 
 
 def _select_wrapper(args: Optional[argparse.Namespace]) -> SelectionInfo:
@@ -176,7 +185,7 @@ IS_PYSIDE: bool
 _initialized = False
 
 
-def init(args: Optional[argparse.Namespace] = None) -> None:
+def init(args: Optional[argparse.Namespace] = None) -> SelectionInfo:
     """Initialize Qt wrapper globals.
 
     There is two ways how this function can be called:
@@ -199,14 +208,12 @@ def init(args: Optional[argparse.Namespace] = None) -> None:
         # Implicit initialization can happen multiple times
         # (all subsequent calls are a no-op)
         if _initialized:
-            return
+            return INFO
     else:
         # Explicit initialization can happen exactly once, and if it's used, there
         # should not be any implicit initialization (qutebrowser.qt imports) before it.
         if _initialized:  # pylint: disable=else-if-used
             raise Error("init() already called before application init")
-    _initialized = True
-
     for name in WRAPPERS:
         # If any Qt wrapper has been imported before this, all hope is lost.
         if name in sys.modules:
@@ -224,3 +231,6 @@ def init(args: Optional[argparse.Namespace] = None) -> None:
     IS_PYSIDE = USE_PYSIDE6
     assert IS_QT5 ^ IS_QT6
     assert IS_PYQT ^ IS_PYSIDE
+
+    _initialized = True
+    return INFO
