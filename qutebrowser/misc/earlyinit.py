@@ -136,17 +136,6 @@ def init_faulthandler(fileobj=sys.__stderr__):
         # pylint: enable=no-member,useless-suppression
 
 
-def check_qt_available(info):
-    """Validate that a Qt wrapper is importable based on the provided SelectionInfo.
-
-    Args:
-        info: A machinery.SelectionInfo instance.
-    """
-    from qutebrowser.qt import machinery
-
-    if info.wrapper is None:
-        raise machinery.NoWrapperAvailableError(info)
-
 
 def check_pyqt():
     """Check if PyQt core modules (QtCore/QtWidgets) are installed."""
@@ -342,10 +331,10 @@ def early_init(args):
     # First we initialize the faulthandler as early as possible, so we
     # theoretically could catch segfaults occurring later during earlyinit.
     init_faulthandler()
-    # Initialize machinery early and check that a Qt wrapper is available.
+    # Initialize machinery early - NoWrapperAvailableError is raised automatically
+    # if no Qt wrapper can be imported.
     from qutebrowser.qt import machinery
     info = machinery.init()
-    check_qt_available(info)
     # Here we check if QtCore is available, and if not, print a message to the
     # console or via Tk.
     check_pyqt()
