@@ -311,6 +311,20 @@ qt.workarounds.remove_service_workers:
     Note however that enabling this option *can lead to data loss* on some pages (as
     Service Worker data isn't persisted) and will negatively impact start-up time.
 
+qt.workarounds.locale:
+  type: Bool
+  default: false
+  backend: QtWebEngine
+  restart: true
+  desc: >-
+    Work around locale issues in QtWebEngine 5.15.3.
+
+    With some locales, QtWebEngine 5.15.3 shows a blank page and logs
+    "Network service crashed, restarting service." because no .pak
+    resource file exists for the current locale. When this option is
+    enabled, qutebrowser detects the missing locale file and passes
+    an appropriate `--lang` flag so that QtWebEngine can start normally.
+
 ## auto_save
 
 auto_save.interval:

@@ -19,7 +19,9 @@
 
 """Get arguments to pass to Qt."""
 
+import locale
 import os
+import pathlib
 import sys
 import argparse
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
@@ -157,6 +159,112 @@ def _qtwebengine_features(
     return (enabled_features, disabled_features)
 
 
+def _get_locale_pak_path(locales_dir: pathlib.Path, locale_name: str) -> pathlib.Path:
+    """Get the expected .pak file path for a given locale name.
+
+    Args:
+        locales_dir: The directory containing locale .pak files.
+        locale_name: The locale name (e.g. "en-US").
+
+    Return:
+        The path to the expected .pak file.
+    """
+    return locales_dir / (locale_name + '.pak')
+
+
+# Chromium-compatible mappings for special locale cases.
+# See chromium/src/ui/base/l10n/l10n_util.cc
+_CHROMIUM_SPECIAL_MAPPINGS: Dict[str, str] = {
+    'en': 'en-US',
+    'en-LR': 'en-US',
+    'en-PH': 'en-US',
+    'es': 'es-419',
+    'pt': 'pt-BR',
+    'zh': 'zh-CN',
+    'zh-HK': 'zh-TW',
+    'zh-MO': 'zh-TW',
+}
+
+
+def _get_lang_override(
+        versions: version.WebEngineVersions,
+        locale_name: str,
+        locales_dir: pathlib.Path,
+) -> Optional[str]:
+    """Get the language override to pass via --lang, if needed.
+
+    This applies Chromium-compatible fallback logic for locales whose .pak
+    file is missing in QtWebEngine 5.15.3.
+
+    Args:
+        versions: The current WebEngine version info.
+        locale_name: The current system locale (e.g. "es_MX.UTF-8").
+        locales_dir: The directory containing locale .pak files.
+
+    Return:
+        The language to pass with --lang, or None if no override is needed.
+    """
+    if not config.val.qt.workarounds.locale:
+        return None
+    if not utils.is_linux:
+        return None
+    if versions.webengine != utils.VersionNumber(5, 15, 3):
+        return None
+
+    # Normalize locale: strip encoding (e.g. ".UTF-8"), replace _ with -
+    normalized = locale_name.split('.')[0].replace('_', '-')
+
+    if not normalized:
+        return None
+
+    # If the pak file already exists for the full locale, no override needed
+    if _get_locale_pak_path(locales_dir, normalized).exists():
+        return None
+
+    # Apply Chromium special mappings first
+    if normalized in _CHROMIUM_SPECIAL_MAPPINGS:
+        mapped = _CHROMIUM_SPECIAL_MAPPINGS[normalized]
+        if _get_locale_pak_path(locales_dir, mapped).exists():
+            return mapped
+
+    # For es-* locales, try es-419 fallback
+    if normalized.startswith('es-'):
+        candidate = 'es-419'
+        if _get_locale_pak_path(locales_dir, candidate).exists():
+            return candidate
+
+    # For pt-* locales, try pt-PT then pt-BR
+    if normalized.startswith('pt-'):
+        for candidate in ['pt-PT', 'pt-BR']:
+            if _get_locale_pak_path(locales_dir, candidate).exists():
+                return candidate
+
+    # For zh-* locales, try zh-CN then zh-TW
+    if normalized.startswith('zh-'):
+        for candidate in ['zh-CN', 'zh-TW']:
+            if _get_locale_pak_path(locales_dir, candidate).exists():
+                return candidate
+
+    # Try base language (e.g. "es" from "es-MX")
+    if '-' in normalized:
+        base = normalized.split('-')[0]
+        if _get_locale_pak_path(locales_dir, base).exists():
+            return base
+
+        # Apply Chromium mappings to the base language too
+        if base in _CHROMIUM_SPECIAL_MAPPINGS:
+            mapped = _CHROMIUM_SPECIAL_MAPPINGS[base]
+            if _get_locale_pak_path(locales_dir, mapped).exists():
+                return mapped
+
+    # Ultimate fallback
+    fallback = 'en-US'
+    if _get_locale_pak_path(locales_dir, fallback).exists():
+        return fallback
+
+    return None
+
+
 def _qtwebengine_args(
         namespace: argparse.Namespace,
         special_flags: Sequence[str],
@@ -208,6 +316,15 @@ def _qtwebengine_args(
         yield _DISABLE_FEATURES + ','.join(disabled_features)
 
     yield from _qtwebengine_settings_args(versions)
+
+    from PyQt5.QtCore import QLibraryInfo
+    locales_dir = pathlib.Path(
+        QLibraryInfo.location(QLibraryInfo.DataPath)
+    ) / 'qtwebengine_locales'
+    current_locale = locale.getlocale()[0] or ''
+    lang_override = _get_lang_override(versions, current_locale, locales_dir)
+    if lang_override is not None:
+        yield f'--lang={lang_override}'
 
 
 def _qtwebengine_settings_args(versions: version.WebEngineVersions) -> Iterator[str]:
