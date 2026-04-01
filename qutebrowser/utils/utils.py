@@ -799,17 +799,18 @@ def parse_duration(duration: str) -> int:
     if stripped.isdigit():
         ms = int(stripped)
         if ms < 0:
-            raise ValueError("Duration must not be negative.")
+            raise ValueError("Duration must not be negative (can't run something in the past).")
         return ms
 
     # Try parsing as a plain number (e.g. negative or float without units)
     try:
         val = float(stripped)
-        if val < 0:
-            raise ValueError("Duration must not be negative.")
-        return int(val)
     except ValueError:
         pass
+    else:
+        if val < 0:
+            raise ValueError("Duration must not be negative (can't run something in the past).")
+        return int(val)
 
     # Parse unit-based format: XhYmZs
     total_ms = 0.0
@@ -820,7 +821,7 @@ def parse_duration(duration: str) -> int:
 
     while pos < len(s):
         # Skip whitespace
-        while pos < len(s) and s[pos] == ' ':
+        while pos < len(s) and s[pos].isspace():
             pos += 1
         if pos >= len(s):
             break
@@ -846,6 +847,6 @@ def parse_duration(duration: str) -> int:
         raise ValueError(f"Invalid duration string: {duration!r}")
 
     if total_ms < 0:
-        raise ValueError("Duration must not be negative.")
+        raise ValueError("Duration must not be negative (can't run something in the past).")
 
     return int(total_ms)
