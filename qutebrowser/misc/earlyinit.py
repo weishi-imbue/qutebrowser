@@ -142,10 +142,10 @@ def check_qt_available(info):
     Args:
         info: A machinery.SelectionInfo instance.
     """
-    from qutebrowser.qt import machinery
-
-    if info.wrapper is None:
-        raise machinery.NoWrapperAvailableError(info)
+    # The NoWrapperAvailableError is already raised from within _autoselect_wrapper()
+    # if no wrapper is available, so this function is effectively a no-op.
+    # Kept for API compatibility.
+    pass
 
 
 def check_pyqt():
