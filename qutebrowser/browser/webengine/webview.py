@@ -293,9 +293,10 @@ class WebEnginePage(QWebEnginePage):
         accepted_mimetypes: Iterable[str],
     ) -> List[str]:
         """Override chooseFiles to (optionally) invoke custom file uploader."""
+        accepted_mimetypes = list(accepted_mimetypes)
         extra = self.extra_suffixes_workaround(accepted_mimetypes)
         if extra:
-            accepted_mimetypes = list(accepted_mimetypes) + list(extra)
+            accepted_mimetypes = accepted_mimetypes + list(extra)
 
         handler = config.val.fileselect.handler
         if handler == "default":
